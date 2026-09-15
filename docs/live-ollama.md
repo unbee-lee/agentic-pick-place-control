@@ -63,4 +63,5 @@ Deterministic HTTP-boundary tests run in the normal test suite and cover malform
 actions, errors, bounded repairs, exact dispatch, context isolation, queue timeout
 and cancellation. Passing those tests or this small live smoke check does not
 establish clarification quality or sustained reliability; that evaluation remains
-issue #7. MQTT and a separate simulated RES remain separate work.
+issue #7. See [the integrated workflow](integrated-workflow.md) to connect these roles
+to MQTT and the separate simulated RES.

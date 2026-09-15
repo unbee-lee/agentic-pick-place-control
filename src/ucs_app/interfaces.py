@@ -4,6 +4,12 @@ from dataclasses import dataclass
 from typing import AsyncIterator, Literal, Mapping, Optional, Protocol, Tuple
 
 
+class AdapterFailure(Exception):
+    """Adapter error with a fixed public hint, independent of raw exception text."""
+
+    public_hint = ""
+
+
 @dataclass(frozen=True)
 class AgentContext:
     """Request evidence passed to a role, including validation feedback."""

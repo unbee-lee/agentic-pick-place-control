@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from ucs_app.actions import Arrange, AskUser, Clarify, robot_action, command_action
-from ucs_app.interfaces import AgentContext, RobotCommandAgent, RobotExecutionStation, UserCommandAgent
+from ucs_app.interfaces import AdapterFailure, AgentContext, RobotCommandAgent, RobotExecutionStation, UserCommandAgent
 from ucs_app.sessions import BrowserSession, SessionStore
 from ucs_app.transport import utc_timestamp
 from ucs_contracts import ContractValidationError, validate_message, validate_target_positions
@@ -142,6 +142,10 @@ class UcsWorkflow:
                 message = "Request stopped because an adapter failed or a workflow limit was reached. Nothing was sent."
             else:
                 message = "Execution outcome is unknown. The command will not be resent automatically."
+            if isinstance(error, AdapterFailure):
+                message += " " + error.public_hint
+            elif isinstance(error, asyncio.TimeoutError) and session.active_command is not None:
+                message += " Check the execution service and its configured timeout; establish the outcome before retrying."
             session.emit(kind="error", message=message,
                          details={"outcome_unknown": session.active_command is not None})
             if isinstance(error, asyncio.CancelledError):

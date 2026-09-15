@@ -33,8 +33,9 @@ Open <http://127.0.0.1:8000>. The controlled harness requires no model service, 
 - [Controlled composition](docs/controlled-ucs.md): exact harness behaviour and browser acceptance test.
 - [Live Ollama composition](docs/live-ollama.md): configurable shared-model roles, simulated RES, and live smoke check.
 - [MQTT composition](docs/mqtt-res.md): real broker, separate simulated RES, configuration, and integration checks.
+- [Integrated workflow](docs/integrated-workflow.md): both live roles with MQTT, separate RES, and separately reported deterministic/live checks.
 
-The live composition connects both roles to one Ollama model with an in-process simulated RES. The MQTT composition uses controlled agents with a real broker and separate Simulated RES. Combining them is tracked in issue #4. Install Mosquitto on PATH to run the complete suite. Browser speech input and Jetson/HTTPS deployment remain follow-up work. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation in issue #7.
+The integrated composition connects both live roles to MQTT and a separate Simulated RES. Simpler model-only and controlled-MQTT compositions remain available for isolated checks. Live-model acceptance remains open in issues #2 and #4. Install Mosquitto on PATH to run the complete suite. Browser speech input and Jetson/HTTPS deployment remain follow-up work. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation in issue #7.
 
 GitHub issues track implementation work; pull requests record changes and verification.
 
