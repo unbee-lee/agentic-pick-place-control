@@ -54,6 +54,8 @@ def create_app(
     robot_command_agent: RobotCommandAgent,
     robot_execution_station: RobotExecutionStation,
     composition_label: str,
+    agent_timeout: float = 20,
+    max_repairs: int = 2,
 ) -> FastAPI:
     """Build a UCS from explicit adapters at its two external seams."""
 
@@ -63,6 +65,8 @@ def create_app(
         robot_command_agent=robot_command_agent,
         robot_execution_station=robot_execution_station,
         sessions=sessions,
+        agent_timeout=agent_timeout,
+        max_repairs=max_repairs,
     )
     application = FastAPI(title="User Command Station")
 
