@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from ucs_app.app import create_app
 from ucs_app.controlled import ControlledRobotCommandAgent, ControlledUserCommandAgent
-from ucs_app.interfaces import ControllerUpdate
+from ucs_app.interfaces import AdapterFailure, ControllerUpdate
 from ucs_contracts import validate_message, validate_target_positions
 
 COMMAND_TOPIC = "robot/command"
@@ -20,8 +20,10 @@ RESULT_TOPIC = "robot/result"
 MAX_PAYLOAD_BYTES = 65536
 
 
-class MqttError(Exception):
+class MqttError(AdapterFailure):
     """Bounded transport failure without broker credentials or payloads."""
+
+    public_hint = "Check broker connectivity and permissions and the simulated RES; establish the execution outcome before retrying."
 
 
 class MqttConfig(BaseModel):

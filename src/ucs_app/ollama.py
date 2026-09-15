@@ -12,13 +12,15 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ucs_app.actions import command_action, robot_action
-from ucs_app.interfaces import AgentContext
+from ucs_app.interfaces import AdapterFailure, AgentContext
 
 Role = Literal["user", "robot"]
 
 
-class OllamaError(Exception):
+class OllamaError(AdapterFailure):
     """Bounded diagnostic that never contains a response body or request evidence."""
+
+    public_hint = "Check the Ollama service and model configuration; the model must return a supported action."
 
 
 class OllamaConfig(BaseModel):
