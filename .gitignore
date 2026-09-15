@@ -1,0 +1,47 @@
+# Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Personal and supervisor-only material
+local-notes/
+deliverables/supervisor/
+AGENTS.md
+.agents/
+skills-lock.json
+
+# User recordings and transient uploads
+recordings/
+uploads/
+local-audio/
+
+# Logs, local models, builds, and temporary output
+*.log
+*.gguf
+dist/
+build/
+tmp/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+
+# Intentionally do not ignore all audio formats: deterministic test audio may
+# be reviewed and committed under tests/fixtures/audio/ when required.
+
+# Local agent and planning configuration
+.codex/
+CLAUDE.md

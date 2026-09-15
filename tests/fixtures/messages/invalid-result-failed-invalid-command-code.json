@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "message_id": "76f47e9d-3df4-4d66-8899-73f65b852575",
+  "status": "DONE",
+  "execution": {
+    "status": "FAILED",
+    "error": {
+      "code": "INVALID_COMMAND",
+      "message": "The command was invalid after execution began."
+    }
+  },
+  "verification": {
+    "status": "NOT_RUN",
+    "outcome": null,
+    "observed_positions": null,
+    "error": null
+  },
+  "completed_at": "2026-09-01T09:00:15Z"
+}

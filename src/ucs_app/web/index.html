@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>User Command Station</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: #172033;
+        background: #eef2f7;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; }
+      button, textarea { font: inherit; }
+      .shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 72px; }
+      header { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; margin-bottom: 48px; }
+      .eyebrow { margin: 0 0 8px; color: #52627a; font-size: 0.78rem; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.6rem); line-height: 1.1; letter-spacing: -0.045em; }
+      .layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr); gap: 36px; align-items: start; }
+      .stack { display: grid; gap: 32px; }
+      .panel { border: 1px solid #d7dee9; border-radius: 18px; background: rgba(255,255,255,0.96); box-shadow: 0 12px 30px rgba(38, 52, 77, 0.07); overflow: hidden; }
+      .panel-body { padding: 30px; }
+      .panel h2 { margin: 0 0 12px; font-size: 1.08rem; }
+      .hint { margin: 0 0 24px; color: #68768a; font-size: 0.9rem; line-height: 1.5; }
+      textarea { width: 100%; min-height: 112px; resize: vertical; padding: 14px; border: 1px solid #bac6d7; border-radius: 12px; color: #172033; background: #fbfcfe; line-height: 1.5; }
+      textarea:focus { outline: 3px solid rgba(46, 105, 213, 0.18); border-color: #2e69d5; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      button { min-height: 42px; padding: 0 17px; border: 0; border-radius: 10px; cursor: pointer; font-weight: 720; }
+      button:disabled { cursor: not-allowed; opacity: 0.48; }
+      .primary { color: #fff; background: #235fc7; }
+      .secondary { color: #34445c; background: #e9eef5; }
+      .error { min-height: 20px; margin: 10px 0 0; color: #b42318; font-size: 0.88rem; }
+      .draft-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+      .animal { padding: 14px; border: 1px solid #d8e0eb; border-radius: 12px; background: #f7f9fc; }
+      .animal strong { display: block; margin-bottom: 5px; }
+      .animal span { color: #52627a; font-size: 0.87rem; }
+      .status-value { margin: 12px 0 0; font-size: 1.65rem; font-weight: 750; color: #235fc7; }
+      .status-value[data-state="failed"], .status-value[data-state="unknown"] { color: #b42318; }
+      .status-value[data-state="completed"] { color: #18784a; }
+      .result-copy { margin: 14px 0 0; color: #45546a; line-height: 1.5; }
+      .activity-head { display: flex; align-items: center; justify-content: space-between; padding: 30px 30px 24px; border-bottom: 1px solid #e2e7ef; }
+      .activity-head h2 { margin: 0; }
+      .trail { max-height: 620px; margin: 0; padding: 12px 30px 30px; list-style: none; overflow: auto; }
+      .trail li { position: relative; padding: 13px 0 13px 25px; border-bottom: 1px solid #edf0f5; color: #3d4b61; line-height: 1.4; }
+      .trail li::before { content: ""; position: absolute; left: 2px; top: 19px; width: 9px; height: 9px; border-radius: 50%; background: #6f85a5; }
+      .trail li[data-event-kind="result"]::before { background: #26935c; }
+      .trail li[data-event-kind="clarification"]::before { background: #d79b27; }
+      .trail:empty::before { content: "The steps for your next arrangement will appear here."; display: block; padding: 12px 0; color: #68768a; line-height: 1.6; }
+      .input-label { display: block; margin: 0 0 10px; font-size: 0.9rem; font-weight: 700; }
+      .clarification { margin: 0 0 26px; padding: 22px; border: 1px solid #e9c976; border-left: 4px solid #b97b12; border-radius: 12px; background: #fff8e8; }
+      .clarification h3 { margin: 0 0 12px; color: #79520d; font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
+      .clarification-question { margin: 0; color: #473715; font-size: 1.08rem; font-weight: 650; line-height: 1.6; overflow-wrap: anywhere; }
+      .clarification-context { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #eddcb7; color: #71634c; font-size: 0.85rem; line-height: 1.5; overflow-wrap: anywhere; }
+      .trail small { display: block; margin-top: 4px; color: #8691a2; text-transform: capitalize; }
+      [hidden] { display: none !important; }
+      @media (max-width: 820px) {
+        header { flex-direction: column; }
+        .layout { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 520px) {
+        .shell { width: min(100% - 20px, 1120px); padding-top: 32px; }
+        header { margin-bottom: 32px; }
+        .panel-body, .activity-head { padding: 24px; }
+        .layout, .stack { gap: 24px; }
+        .trail { padding: 12px 24px 24px; }
+        .draft-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">User Command Station</p>
+          <h1>Set the target arrangement</h1>
+        </div>
+      </header>
+
+      <div class="layout">
+        <div class="stack">
+          <section class="panel">
+            <div class="panel-body">
+              <h2>Arrangement request</h2>
+              <section class="clarification" data-testid="clarification-panel" aria-labelledby="clarification-title" aria-live="polite" hidden>
+                <h3 id="clarification-title">Please clarify your request</h3>
+                <p class="clarification-question" id="clarification-question" data-testid="clarification-question"></p>
+                <p class="clarification-context" data-testid="clarification-context"></p>
+              </section>
+              <p class="hint" id="request-hint">Name where the elephant, bear, and hippo should appear.</p>
+              <form data-testid="request-form">
+                <label class="input-label" for="arrangement-request" data-testid="input-label">Your request</label>
+                <textarea id="arrangement-request" aria-describedby="request-hint" data-testid="arrangement-request" required placeholder="For example: elephant left, bear centre, hippo right"></textarea>
+                <div class="actions">
+                  <button class="primary" type="submit">Submit request</button>
+                  <button class="secondary" type="button" data-action="cancel" hidden>Cancel request</button>
+                </div>
+                <p class="error" data-testid="request-error" aria-live="polite"></p>
+              </form>
+            </div>
+          </section>
+
+          <section class="panel" data-testid="validated-target" hidden>
+            <div class="panel-body">
+              <p class="eyebrow">Target arrangement</p>
+              <h2>Validated target</h2>
+              <p class="hint" data-testid="proposal-message"></p>
+              <div class="draft-grid">
+                <div class="animal" data-testid="target-E"><strong>Elephant</strong><span></span></div>
+                <div class="animal" data-testid="target-B"><strong>Bear</strong><span></span></div>
+                <div class="animal" data-testid="target-H"><strong>Hippo</strong><span></span></div>
+              </div>
+
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-body">
+              <h2>Status</h2>
+              <div role="status" aria-live="polite" aria-atomic="true">
+                <p class="status-value" data-testid="ucs-status" data-state="connecting">Connecting</p>
+                <p class="result-copy" data-testid="status-description">Connecting to the UCS.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="panel">
+          <div class="activity-head"><h2>Activity trail</h2></div>
+          <ol class="trail" data-testid="activity-trail"></ol>
+        </aside>
+      </div>
+    </main>
+
+    <script>
+      const form = document.querySelector('[data-testid="request-form"]');
+      const requestInput = document.querySelector('[data-testid="arrangement-request"]');
+      const requestError = document.querySelector('[data-testid="request-error"]');
+      const submitButton = form.querySelector('button[type="submit"]');
+      const targetPanel = document.querySelector('[data-testid="validated-target"]');
+      const questionPanel = document.querySelector('[data-testid="clarification-panel"]');
+      const questionContext = document.querySelector('[data-testid="clarification-context"]');
+      const inputLabel = document.querySelector('[data-testid="input-label"]');
+      const inputHint = document.querySelector('#request-hint');
+      let originalRequest = '';
+      const question = document.querySelector('[data-testid="clarification-question"]');
+      const cancelButton = document.querySelector('[data-action="cancel"]');
+      const trail = document.querySelector('[data-testid="activity-trail"]');
+      const statusLabel = document.querySelector('[data-testid="ucs-status"]');
+      const statusDescription = document.querySelector('[data-testid="status-description"]');
+      let connected = false;
+      let synchronized = false;
+      let serverBusy = false;
+      let currentStatus = { state: 'ready', label: 'Ready', description: 'Enter an arrangement request to begin.' };
+
+      function showStatus(state, label, description) {
+        currentStatus = { state, label, description };
+        renderStatus();
+      }
+      function renderStatus() {
+        if (!connected) return;
+        statusLabel.dataset.state = currentStatus.state;
+        statusLabel.textContent = currentStatus.label;
+        statusDescription.textContent = currentStatus.description;
+      }
+      let pendingReply = null;
+      let inFlight = false;
+      let active = false;
+      let unknown = false;
+      let requestId = null;
+
+      function controls() {
+        submitButton.disabled = !connected || !synchronized || serverBusy || inFlight || active || unknown;
+        cancelButton.disabled = !connected || !synchronized || serverBusy || inFlight;
+        cancelButton.hidden = pendingReply === null;
+        submitButton.textContent = pendingReply ? 'Send answer' : 'Submit request';
+      }
+      function clearQuestion() {
+        pendingReply = null;
+        questionPanel.hidden = true;
+        inputLabel.textContent = 'Your request';
+        inputHint.hidden = false;
+        requestInput.placeholder = 'For example: elephant left, bear centre, hippo right';
+        requestInput.setAttribute('aria-describedby', 'request-hint');
+        requestInput.value = '';
+      }
+      function restoreGuards(state) {
+        serverBusy = Boolean(state.processing);
+        active = Boolean(state.active);
+        unknown = Boolean(state.outcome_unknown);
+        originalRequest = state.original_request || '';
+        if (!state.awaiting_reply) {
+          pendingReply = null;
+          questionPanel.hidden = true;
+          inputLabel.textContent = 'Your request';
+          inputHint.hidden = false;
+          requestInput.placeholder = 'For example: elephant left, bear centre, hippo right';
+          requestInput.setAttribute('aria-describedby', 'request-hint');
+        }
+        if (unknown) {
+          showStatus('unknown', 'Outcome unknown', 'The execution outcome is unknown. The command will not be resent automatically.');
+        } else if (active) {
+          showStatus('executing', 'Executing', 'The simulated RES is carrying out the validated arrangement.');
+        } else if (serverBusy && !state.awaiting_reply) {
+          showStatus('processing', 'Processing request', 'Interpreting the request and checking the target arrangement.');
+        }
+        controls();
+      }
+      function applyEvent(event) {
+        const details = event.details || {};
+        if (event.kind === 'session_state') {
+          restoreGuards(details);
+          return;
+        }
+        if (event.kind === 'input' && details.new_request) {
+          trail.replaceChildren();
+          originalRequest = details.arrangement_request;
+          clearQuestion();
+          requestError.textContent = '';
+        }
+        const item = document.createElement('li');
+        item.dataset.eventKind = event.kind;
+        item.textContent = event.message;
+        trail.append(item);
+        if (event.kind === 'input') {
+          serverBusy = true;
+          targetPanel.hidden = true;
+          showStatus('processing', 'Processing request', 'Interpreting the request and checking the target arrangement.');
+        }
+        if (event.kind === 'proposal') {
+          document.querySelector('[data-testid="proposal-message"]').textContent = event.message;
+          ['E', 'B', 'H'].forEach((animal) => {
+            document.querySelector(`[data-testid="target-${animal}"] span`).textContent =
+              String(details.target_positions[animal]).replaceAll('_', ' ');
+          });
+          targetPanel.hidden = false;
+        }
+        if (event.kind === 'clarification') {
+          pendingReply = { workflow_id: details.workflow_id, turn: details.turn };
+          question.textContent = event.message;
+          questionContext.textContent = `Your request: “${originalRequest}”`;
+          questionPanel.hidden = false;
+          inputLabel.textContent = 'Your answer';
+          inputHint.hidden = true;
+          requestInput.placeholder = 'Answer the question above';
+          requestInput.setAttribute('aria-describedby', 'clarification-question');
+          requestInput.focus();
+          requestInput.value = '';
+          showStatus('clarification', 'Needs clarification', 'Answer the question above or cancel this request.');
+        }
+        if (event.kind === 'cancellation') {
+          clearQuestion();
+          showStatus('cancelled', 'Cancelled', 'Nothing was sent. You can submit a new request.');
+        }
+        if (event.kind === 'command_publication') {
+          clearQuestion();
+          active = true;
+          showStatus('executing', 'Executing', 'The simulated RES is carrying out the validated arrangement.');
+        }
+        if (event.kind === 'result') {
+          active = false;
+          clearQuestion();
+          unknown = false;
+          const outcome = details.execution_status;
+          if (outcome === 'COMPLETED') {
+            showStatus('completed', 'Completed', 'Simulation completed. Physical placement was not verified.');
+          } else if (outcome === 'CANCELLED') {
+            showStatus('cancelled', 'Cancelled', 'The RES reported that execution was cancelled.');
+          } else if (outcome === 'NOT_STARTED') {
+            showStatus('failed', 'Not started', 'The RES did not start the arrangement.');
+          } else {
+            showStatus('failed', 'Failed', 'The RES could not complete the arrangement.');
+          }
+          requestId = null;
+        }
+        if (event.kind === 'error') {
+          unknown = Boolean(details.outcome_unknown);
+          clearQuestion();
+          requestError.textContent = event.message;
+          showStatus(unknown ? 'unknown' : 'failed', unknown ? 'Outcome unknown' : 'Failed', event.message);
+        }
+        controls();
+      }
+      const eventSource = new EventSource('/events');
+      eventSource.onopen = () => {
+        connected = true;
+        synchronized = false;
+        statusLabel.textContent = 'Restoring session';
+        statusDescription.textContent = 'Checking your current request before enabling input.';
+        controls();
+      };
+      eventSource.onerror = () => {
+        connected = false;
+        synchronized = false;
+        if (active || serverBusy || inFlight) {
+          unknown = true;
+          currentStatus = { state: 'unknown', label: 'Outcome unknown', description: 'Live updates were interrupted. The command will not be resent automatically.' };
+        }
+        statusLabel.dataset.state = 'disconnected';
+        statusLabel.textContent = 'Connection lost';
+        statusDescription.textContent = 'Live updates are unavailable. A submitted command may still be running; it will not be resent automatically.';
+        controls();
+      };
+      eventSource.addEventListener('snapshot', (message) => {
+        const snapshot = JSON.parse(message.data);
+        // Rebuild the current request, not the entire browser-session history.
+        trail.replaceChildren();
+        targetPanel.hidden = true;
+        requestError.textContent = '';
+        clearQuestion();
+        active = false;
+        unknown = false;
+        serverBusy = false;
+        originalRequest = snapshot.original_request || '';
+        showStatus('ready', 'Ready', 'Enter an arrangement request to begin.');
+        for (const event of snapshot.events) applyEvent(event);
+        restoreGuards(snapshot);
+        synchronized = true;
+        controls();
+      });
+      eventSource.onmessage = (message) => applyEvent(JSON.parse(message.data));
+
+      async function post(path, body) {
+        const response = await fetch(path, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const payload = await response.json();
+          const error = new Error(typeof payload.detail === 'string' ? payload.detail : 'Invalid request.');
+          error.responseReceived = true;
+          throw error;
+        }
+        return response.json();
+      }
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!connected || !synchronized || serverBusy || inFlight || active || unknown) return;
+        const text = requestInput.value.trim();
+        if (!text) return;
+        inFlight = true;
+        requestError.textContent = '';
+        showStatus('processing', 'Processing request', 'Interpreting the request and checking the target arrangement.');
+        controls();
+        try {
+          if (pendingReply) {
+            await post('/clarifications', { ...pendingReply, text });
+          } else {
+            if (!requestId) {
+              originalRequest = text;
+              trail.replaceChildren();
+              targetPanel.hidden = true;
+            }
+            requestId = requestId || crypto.randomUUID();
+            await post('/arrangement-requests', { text, request_id: requestId });
+          }
+          requestId = null;
+        } catch (error) {
+          requestError.textContent = error.message;
+          if (!error.responseReceived || active || unknown) {
+            unknown = true;
+            showStatus('unknown', 'Outcome unknown', 'The request outcome is uncertain. It will not be resent automatically.');
+          } else if (!pendingReply) {
+            showStatus('failed', 'Failed', error.message);
+          } else {
+            showStatus('clarification', 'Needs clarification', 'The answer was not accepted. Check the question and try again.');
+          }
+          // Retain the request ID on failure; retry must never become a new dispatch.
+        } finally {
+          inFlight = false;
+          controls();
+        }
+      });
+      cancelButton.addEventListener('click', async () => {
+        if (!connected || !synchronized || serverBusy || !pendingReply || inFlight) return;
+        inFlight = true;
+        controls();
+        try {
+          await post('/clarifications/cancel', pendingReply);
+          clearQuestion();
+          showStatus('cancelled', 'Cancelled', 'Nothing was sent. You can submit a new request.');
+          requestId = null;
+        } catch (error) { requestError.textContent = error.message; }
+        finally { inFlight = false; controls(); }
+      });
+      controls();
+    </script>
+  </body>
+</html>

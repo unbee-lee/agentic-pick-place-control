@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agentic-pick-place-control:robot-command:1.0",
+  "title": "Robot command",
+  "description": "A complete target arrangement published by the UCS.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_id",
+    "type",
+    "target_positions",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "const": "ARRANGE"
+    },
+    "target_positions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["E", "B", "H"],
+      "properties": {
+        "E": {
+          "$ref": "#/$defs/front_position"
+        },
+        "B": {
+          "$ref": "#/$defs/front_position"
+        },
+        "H": {
+          "$ref": "#/$defs/front_position"
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "front_position": {
+      "type": "string",
+      "enum": ["front_left", "front_center", "front_right"]
+    }
+  }
+}
