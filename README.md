@@ -31,9 +31,10 @@ Open <http://127.0.0.1:8000>. The controlled harness requires no model service, 
 - [Design](docs/design.md): roles, architecture, validation, and execution boundary.
 - [Contracts](docs/contracts.md): Python validation entry points and message schemas.
 - [Controlled composition](docs/controlled-ucs.md): exact harness behaviour and browser acceptance test.
+- [Live Ollama composition](docs/live-ollama.md): configurable shared-model roles, simulated RES, and live smoke check.
 - [MQTT composition](docs/mqtt-res.md): real broker, separate simulated RES, configuration, and integration checks.
 
-The MQTT composition uses controlled agents with a real broker and separate Simulated RES. Install Mosquitto on PATH to run the complete test suite. Live Ollama integration, browser speech input, and Jetson/HTTPS deployment remain follow-up work. The controlled harness verifies application routing and safeguards, not model accuracy or physical safety.
+The live composition connects both roles to one Ollama model with an in-process simulated RES. The MQTT composition uses controlled agents with a real broker and separate Simulated RES. Combining them is tracked in issue #4. Install Mosquitto on PATH to run the complete suite. Browser speech input and Jetson/HTTPS deployment remain follow-up work. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation in issue #7.
 
 GitHub issues track implementation work; pull requests record changes and verification.
 

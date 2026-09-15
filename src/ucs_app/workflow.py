@@ -135,7 +135,7 @@ class UcsWorkflow:
                 state,  # type: ignore[arg-type]  # LangGraph TypedDict stub mismatch
                 config=self._config(session.session_id, state["workflow_id"]),
             )
-        except Exception as error:
+        except (Exception, asyncio.CancelledError) as error:
             session.awaiting_reply = False
             if session.active_command is None:
                 session.workflow_id = None
@@ -144,6 +144,8 @@ class UcsWorkflow:
                 message = "Execution outcome is unknown. The command will not be resent automatically."
             session.emit(kind="error", message=message,
                          details={"outcome_unknown": session.active_command is not None})
+            if isinstance(error, asyncio.CancelledError):
+                raise
             raise WorkflowFailure(message) from error
         finally:
             async with session.lock:
