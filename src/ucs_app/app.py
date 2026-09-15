@@ -56,6 +56,7 @@ def create_app(
     composition_label: str,
     agent_timeout: float = 20,
     max_repairs: int = 2,
+    execution_timeout: float = 30,
 ) -> FastAPI:
     """Build a UCS from explicit adapters at its two external seams."""
 
@@ -67,6 +68,7 @@ def create_app(
         sessions=sessions,
         agent_timeout=agent_timeout,
         max_repairs=max_repairs,
+        execution_timeout=execution_timeout,
     )
     application = FastAPI(title="User Command Station")
 
