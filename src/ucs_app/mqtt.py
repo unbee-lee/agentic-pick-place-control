@@ -75,7 +75,11 @@ class MqttRobotExecutionStation:
         validate_target_positions(cast(Mapping[str, object], command["target_positions"]))
         try:
             async with self._config.client() as client:
-                await client.subscribe([(STATUS_TOPIC, 1), (RESULT_TOPIC, 1)])
+                acknowledgements = await client.subscribe([(STATUS_TOPIC, 1), (RESULT_TOPIC, 1)])
+                # subscribe() returns SUBACK failures without raising. Require a
+                # granted QoS for each topic before a command can leave UCS.
+                if len(acknowledgements) != 2 or any(code not in (0, 1, 2) for code in acknowledgements):
+                    raise MqttError("MQTT status/result subscriptions were not granted; command not published")
                 await client.publish(COMMAND_TOPIC, json.dumps(dict(command)), qos=1, retain=False)
                 async for message in client.messages:
                     if message.retain:

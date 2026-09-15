@@ -56,8 +56,10 @@ and a CA file to both server processes. Never commit credentials.
 
 ## Delivery and failure behaviour
 
-- UCS subscribes to `robot/status` and `robot/result` before publishing the exact
-  validated JSON object to `robot/command`.
+- UCS subscribes to `robot/status` and `robot/result` and requires a successful
+  SUBACK grant for each before publishing the exact validated JSON object to
+  `robot/command`. Rejected or incomplete acknowledgements prevent publication.
+  RES likewise requires its command subscription grant before reporting ready.
 - All publications use QoS 1 and `retain=False`. MQTT can deliver duplicates;
   this is not a claim of exactly-once transport.
 - UCS discards retained replies and replies for other message IDs. It validates

@@ -73,7 +73,9 @@ class SimulatedRES:
 
     async def serve(self, config: MqttConfig) -> None:
         async with config.client() as client:
-            await client.subscribe(COMMAND_TOPIC, qos=1)
+            acknowledgements = await client.subscribe(COMMAND_TOPIC, qos=1)
+            if len(acknowledgements) != 1 or acknowledgements[0] not in (0, 1, 2):
+                raise MqttError("MQTT command subscription was not granted")
             print("Simulated RES ready", flush=True)
             async for message in client.messages:
                 await self.handle(client, message)
