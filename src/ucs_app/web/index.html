@@ -92,6 +92,14 @@
               <form data-testid="request-form">
                 <label class="input-label" for="arrangement-request" data-testid="input-label">Your request</label>
                 <textarea id="arrangement-request" aria-describedby="request-hint" data-testid="arrangement-request" required placeholder="For example: elephant left, bear centre, hippo right"></textarea>
+                <section data-testid="speech-controls" hidden>
+                <p class="hint">Optional speech: Start microphone records audio. Stop microphone sends it to Google for transcription. UCS does not save recordings. Text is appended here for your review; nothing is submitted automatically.</p>
+                <div class="actions">
+                  <button class="secondary" type="button" data-testid="speech-start">Start microphone</button>
+                  <button class="secondary" type="button" data-testid="speech-stop" disabled>Stop microphone</button>
+                </div>
+                <p class="hint" data-testid="speech-status" aria-live="polite">Microphone off. You can always type your request.</p>
+                </section>
                 <div class="actions">
                   <button class="primary" type="submit">Submit request</button>
                   <button class="secondary" type="button" data-action="cancel" hidden>Cancel request</button>
@@ -184,6 +192,7 @@
         requestInput.placeholder = 'For example: elephant left, bear centre, hippo right';
         requestInput.setAttribute('aria-describedby', 'request-hint');
         requestInput.value = '';
+        requestInput.dispatchEvent(new Event('input'));
       }
       function restoreGuards(state) {
         serverBusy = Boolean(state.processing);
@@ -247,6 +256,7 @@
           requestInput.setAttribute('aria-describedby', 'clarification-question');
           requestInput.focus();
           requestInput.value = '';
+          requestInput.dispatchEvent(new Event('input'));
           showStatus('clarification', 'Needs clarification', 'Answer the question above or cancel this request.');
         }
         if (event.kind === 'cancellation') {
@@ -384,6 +394,21 @@
         } catch (error) { requestError.textContent = error.message; }
         finally { inFlight = false; controls(); }
       });
+      // Older running servers read this HTML too. Expose speech only when the
+      // serving application has installed the transcription routes.
+      if ('{{SPEECH_ENABLED}}' === 'true') {
+        const speechScript = document.createElement('script');
+        speechScript.src = '/speech/speech.js';
+        speechScript.onload = () => {
+          setupSpeech({
+            input: requestInput, form,
+            context: () => JSON.stringify({pendingReply, active, unknown, serverBusy, inFlight, connected, synchronized}),
+            canApply: () => !submitButton.disabled,
+          });
+          document.querySelector('[data-testid="speech-controls"]').hidden = false;
+        };
+        document.body.append(speechScript);
+      }
       controls();
     </script>
   </body>
