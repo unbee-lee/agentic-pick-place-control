@@ -3,7 +3,7 @@
 import asyncio
 import json
 from importlib.resources import files
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ucs_app.interfaces import RobotCommandAgent, RobotExecutionStation, UserCommandAgent
 from ucs_app.sessions import BrowserSession, SessionStore
+from ucs_app.speech import Transcriber, add_speech_routes
 from ucs_app.workflow import UcsWorkflow, WorkflowConflict, WorkflowFailure
 
 _SESSION_COOKIE = "ucs_session"
@@ -57,6 +58,7 @@ def create_app(
     agent_timeout: float = 20,
     max_repairs: int = 2,
     execution_timeout: float = 30,
+    transcriber: Optional[Transcriber] = None,
 ) -> FastAPI:
     """Build a UCS from explicit adapters at its two external seams."""
 
@@ -83,6 +85,7 @@ def create_app(
             .joinpath("web/index.html")
             .read_text(encoding="utf-8")
             .replace("{{COMPOSITION_LABEL}}", composition_label)
+            .replace("{{SPEECH_ENABLED}}", "true")
         )
         response = HTMLResponse(html)
         response.set_cookie(
@@ -92,6 +95,8 @@ def create_app(
             samesite="lax",
         )
         return response
+
+    add_speech_routes(application, lambda request: _require_session(request, sessions), transcriber)
 
     @application.get("/health")
     async def health() -> dict[str, str]:
