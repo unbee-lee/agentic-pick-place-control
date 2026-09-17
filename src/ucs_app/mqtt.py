@@ -1,6 +1,8 @@
 """MQTT execution boundary: subscribe first, publish once, correlate replies."""
 
 import json
+import asyncio
+from contextlib import suppress
 import os
 import ssl
 from typing import AsyncIterator, Literal, Mapping, Optional, cast
@@ -12,7 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from ucs_app.app import create_app
 from ucs_app.controlled import ControlledRobotCommandAgent, ControlledUserCommandAgent
 from ucs_app.interfaces import AdapterFailure, ControllerUpdate
-from ucs_contracts import validate_message, validate_target_positions
+from ucs_app.sessions import SessionStore
+from ucs_contracts import ContractValidationError, validate_message, validate_target_positions
 
 COMMAND_TOPIC = "robot/command"
 STATUS_TOPIC = "robot/status"
@@ -47,12 +50,13 @@ class MqttConfig(BaseModel):
                    operation_timeout=float(os.getenv("UCS_MQTT_OPERATION_TIMEOUT", "5")),
                    execution_timeout=float(os.getenv("UCS_MQTT_EXECUTION_TIMEOUT", "30")))
 
-    def client(self) -> aiomqtt.Client:
+    def client(self, *, identifier: Optional[str] = None, clean_session: bool = True) -> aiomqtt.Client:
         return aiomqtt.Client(
             hostname=self.host, port=self.port, username=self.username,
             password=self.password.get_secret_value() if self.password else None,
             tls_context=ssl.create_default_context(cafile=self.tls_ca) if self.tls_ca else None,
             timeout=self.operation_timeout, max_queued_incoming_messages=256,
+            identifier=identifier, clean_session=clean_session,
         )
 
 
@@ -71,6 +75,64 @@ def decode_payload(payload: object) -> dict[str, object]:
 class MqttRobotExecutionStation:
     def __init__(self, config: MqttConfig) -> None:
         self._config = config
+
+    async def listen_results(self, sessions: SessionStore) -> None:
+        """Reconnect a receive-only durable subscription; never publish a command."""
+        journal = sessions.journal
+        assert journal is not None
+        while True:
+            sessions.listener_status = "connecting"
+            receiver: Optional[asyncio.Task[None]] = None
+            try:
+                try:
+                    async with self._config.client(identifier=journal.client_id, clean_session=False) as client:
+                        receiver = asyncio.create_task(self._receive_results(client, sessions))
+                        codes = await client.subscribe(RESULT_TOPIC, qos=1)
+                        if len(codes) != 1 or codes[0] not in (0, 1, 2):
+                            raise MqttError("Result subscription rejected")
+                        sessions.listener_status = "ready"
+                        try:
+                            while True:
+                                sessions.reconcile()
+                                # Poll reconciliation without cancelling MQTT's message iterator.
+                                done, _ = await asyncio.wait({receiver}, timeout=0.25)
+                                if done:
+                                    receiver.result()
+                                    raise MqttError("Result stream ended")
+                        except asyncio.CancelledError:
+                            # Give an in-flight disconnect its normal receive path before
+                            # asking aiomqtt to close the socket. Bound shutdown by the
+                            # configured operation timeout; never cancel the reader first.
+                            await asyncio.wait({receiver}, timeout=self._config.operation_timeout)
+                            raise
+                finally:
+                    if receiver is not None:
+                        # Close the connection first. Let the reader observe its disconnect
+                        # and retrieve that exception, including when shutdown races an outage.
+                        with suppress(aiomqtt.MqttError, asyncio.TimeoutError, asyncio.CancelledError):
+                            await asyncio.wait_for(receiver, self._config.operation_timeout)
+            except asyncio.CancelledError:
+                sessions.listener_status = "stopped"
+                raise
+            except (aiomqtt.MqttError, MqttError):
+                sessions.listener_status = "disconnected"
+                await asyncio.sleep(1)
+            except Exception:
+                sessions.listener_status = "failed"
+                raise
+
+    async def _receive_results(self, client: aiomqtt.Client, sessions: SessionStore) -> None:
+        journal = sessions.journal
+        assert journal is not None
+        async for message in client.messages:
+            if message.retain:
+                continue
+            try:
+                payload = decode_payload(message.payload)
+                validate_message("result", payload)
+            except (MqttError, ContractValidationError):
+                continue
+            journal.record_result(payload)
 
     async def execute(self, command: Mapping[str, object]) -> AsyncIterator[ControllerUpdate]:
         validate_message("command", command)
@@ -101,10 +163,12 @@ class MqttRobotExecutionStation:
 def create_mqtt_app() -> FastAPI:
     """Controlled role agents, real broker, separate simulated RES."""
     config = MqttConfig.from_env()
+    res = MqttRobotExecutionStation(config)
     return create_app(
         user_command_agent=ControlledUserCommandAgent(),
         robot_command_agent=ControlledRobotCommandAgent(),
-        robot_execution_station=MqttRobotExecutionStation(config),
+        robot_execution_station=res,
+        result_listener=res.listen_results,
         composition_label="MQTT development — controlled agents, separate simulated RES",
         execution_timeout=config.execution_timeout,
     )

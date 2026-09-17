@@ -92,7 +92,7 @@ def integrated(request: pytest.FixtureRequest, broker_port: int, tmp_path: Path)
     @fake.post("/api/chat")
     async def chat(request: Request) -> JSONResponse:
         body = await request.json()
-        data = json.loads(body["messages"][1]["content"])
+        data = json.loads(body["messages"][-1]["content"])
         role = "user" if body["tools"][0]["function"]["name"] == "handoff_assignment" else "robot"
         evidence.calls.append({"role": role, "context": data, "model": body["model"]})
         if mode == "unavailable":
@@ -109,6 +109,10 @@ def integrated(request: pytest.FixtureRequest, broker_port: int, tmp_path: Path)
             candidate = dict(cast(dict[str, object], action["command"]))
             if mode == "exhaust" or (mode == "repair" and not evidence.candidates):
                 candidate["target_positions"] = {"E": "front_right", "B": "front_center", "H": "front_left"}
+            if not evidence.candidates and mode == "schema-repair":
+                candidate["unexpected"] = True
+            if not evidence.candidates and mode == "metadata-repair":
+                candidate["message_id"] = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
             evidence.candidates.append(candidate)
             action["command"] = candidate
         name = {"ARRANGE": "handoff_assignment", "CLARIFY": "ask_clarification",
@@ -175,7 +179,9 @@ def test_integrated_all_arrangements_and_actual_reply(integrated: tuple[str, Evi
             browser.close()
 
 
-@pytest.mark.parametrize("integrated,expected", [("repair", "Completed"), ("exhaust", "Failed"),
+@pytest.mark.parametrize("integrated,expected", [("repair", "Completed"),
+                                                 ("schema-repair", "Completed"),
+                                                 ("metadata-repair", "Completed"), ("exhaust", "Failed"),
                                                  ("unavailable", "Failed"), ("malformed", "Failed"),
                                                  ("timeout", "Failed")], indirect=["integrated"])
 def test_integrated_repair_and_model_failures(integrated: tuple[str, Evidence], expected: str) -> None:
@@ -196,7 +202,12 @@ def test_integrated_repair_and_model_failures(integrated: tuple[str, Evidence], 
                 contexts = [cast(dict[str, object], c["context"]) for c in evidence.calls if c["role"] == "robot"]
                 assert contexts[0]["assignment"] == contexts[1]["assignment"]
                 assert contexts[0]["command_metadata"] == contexts[1]["command_metadata"]
-                assert "Intent mismatch" in str(contexts[1]["feedback"])
+                assert contexts[1]["candidate"] == evidence.candidates[0]
+                fault = ("Schema error" if "unexpected" in evidence.candidates[0]
+                         else "Metadata error" if evidence.candidates[0]["message_id"] != evidence.candidates[-1]["message_id"]
+                         else "Intent mismatch")
+                assert fault in str(contexts[1]["feedback"])
+                assert len([c for c in evidence.calls if c["role"] == "user"]) == 1
             else:
                 assert not evidence.commands
                 if evidence.candidates:
@@ -238,5 +249,71 @@ def test_integrated_dependency_failure_preserves_guard(integrated: tuple[str, Ev
             expect(page.get_by_test_id("ucs-status")).to_have_text("Outcome unknown")
             expect(page.get_by_role("button", name="Submit request")).to_be_disabled()
             assert len(evidence.commands) == count
+        finally:
+            browser.close()
+
+
+def test_integrated_conflict_reply_correlation_and_stale_guards(integrated: tuple[str, Evidence]) -> None:
+    """A real reply revises intent; replayed requests/replies never call a model or RES."""
+    from uuid import uuid4
+
+    url, evidence = integrated
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(url)
+            expect(page.get_by_test_id("ucs-status")).to_have_text("Ready")
+            request_id = str(uuid4())
+            submission = {"text": "elephant left, bear left, hippo right", "request_id": request_id}
+            response = page.request.post(url + "/arrangement-requests", data=submission)
+            assert response.status == 202
+            pending = response.json()
+            expect(page.get_by_test_id("ucs-status")).to_have_text("Needs clarification")
+            assert not evidence.commands
+            # Invalid arrangement -> RCA feedback -> UCA question, without rewriting intent.
+            assert [call["role"] for call in evidence.calls] == ["user", "robot", "robot", "user"]
+            first_context = cast(dict[str, object], evidence.calls[1]["context"])
+            feedback_context = cast(dict[str, object], evidence.calls[-1]["context"])
+            assert feedback_context["assignment"] == first_context["assignment"]
+            assert feedback_context["feedback"]
+            reply = {"text": "bear centre", "workflow_id": pending["workflow_id"], "turn": pending["turn"]}
+            page.reload()
+            expect(page.get_by_test_id("ucs-status")).to_have_text("Needs clarification")
+            response = page.request.post(url + "/clarifications", data=reply)
+            assert response.status == 202
+            expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
+            assert evidence.commands == [evidence.candidates[-1]]
+            revised = cast(dict[str, object], evidence.calls[-1]["context"])
+            assert revised["assignment"] == {"E": "front_left", "B": "front_center", "H": "front_right"}
+            original_metadata = cast(dict[str, object], first_context["command_metadata"])
+            revised_metadata = cast(dict[str, object], revised["command_metadata"])
+            assert revised_metadata["message_id"] != original_metadata["message_id"]
+            assert revised["replies"] == ["bear centre"]
+            snapshot = page.evaluate("""() => new Promise((resolve, reject) => {
+                const source = new EventSource('/events');
+                source.addEventListener('snapshot', event => {
+                    source.close(); resolve(JSON.parse(event.data));
+                });
+                source.onerror = () => { source.close(); reject(new Error('snapshot failed')); };
+            })""")
+            events = snapshot["events"]
+            for kind in ("command_publication", "progress", "result"):
+                matched = [event for event in events if event["kind"] == kind]
+                assert len(matched) == 1
+                assert matched[0]["details"]["message_id"] == evidence.commands[0]["message_id"]
+            result = next(event for event in events if event["kind"] == "result")
+            assert result["details"]["execution_status"] == "COMPLETED"
+            assert result["details"]["verification_status"] == "NOT_RUN"
+            call_count = len(evidence.calls)
+            for text in ("bear centre", "thanks", "yes"):
+                stale = page.request.post(url + "/clarifications", data={**reply, "text": text})
+                assert stale.status == 409
+            assert page.request.post(url + "/arrangement-requests", data=submission).status == 409
+            assert page.request.post(url + "/confirm", data={}).status == 404
+            page.reload()
+            assert page.request.post(url + "/clarifications", data=reply).status == 409
+            assert len(evidence.calls) == call_count
+            assert len(evidence.commands) == 1
         finally:
             browser.close()

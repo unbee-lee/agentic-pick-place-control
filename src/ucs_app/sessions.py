@@ -3,10 +3,11 @@
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Mapping, Optional, Set
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Set
 from uuid import uuid4
 
 from ucs_contracts.arrangements import TargetArrangement
+from ucs_app.recovery import RecoveryJournal
 
 ActivityKind = Literal[
     "input",
@@ -71,6 +72,8 @@ class BrowserSession:
     clarification_turn: int = 0
     agent_steps: int = 0
     seen_request_ids: Set[str] = field(default_factory=set)
+    workflow_state: Dict[str, Any] = field(default_factory=dict)
+    _persist: Optional[Callable[["BrowserSession"], None]] = field(default=None, repr=False)
     _events: List[ActivityEvent] = field(default_factory=list)
     _subscribers: Set[asyncio.Queue[ActivityEvent]] = field(default_factory=set)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -79,6 +82,7 @@ class BrowserSession:
         """Keep browser history scoped to the latest request without reusing SSE IDs."""
 
         self.original_request = text
+        self.workflow_state = {}
         self._events.clear()
 
     def public_state(self) -> Dict[str, object]:
@@ -119,9 +123,29 @@ class BrowserSession:
             details={} if details is None else dict(details),
         )
         self._events.append(event)
+        self.save()
         for subscriber in self._subscribers:
             subscriber.put_nowait(event)
         return event
+
+    def save(self) -> None:
+        if self._persist is not None:
+            self._persist(self)
+
+    def durable_state(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id, "workflow_id": self.workflow_id,
+            "original_request": self.original_request, "sequence": self._sequence,
+            "request_in_progress": self.request_in_progress, "awaiting_reply": self.awaiting_reply,
+            "clarification_turn": self.clarification_turn, "agent_steps": self.agent_steps,
+            "seen_request_ids": sorted(self.seen_request_ids), "workflow_state": self.workflow_state,
+            "active_command": None if self.active_command is None else {
+                "message_id": self.active_command.message_id,
+                "target": self.active_command.target.model_dump(mode="json")},
+            "last_successful_arrangement": None if self.last_successful_arrangement is None
+                else self.last_successful_arrangement.model_dump(mode="json"),
+            "events": [event.as_dict() for event in self._events],
+        }
 
     def subscribe(self) -> asyncio.Queue[ActivityEvent]:
         """Attach one SSE stream to this browser session."""
@@ -156,15 +180,104 @@ class BrowserSession:
 class SessionStore:
     """Own the lifetime and lookup of browser sessions."""
 
-    def __init__(self) -> None:
+    def __init__(self, state_path: Optional[str] = None) -> None:
         self._sessions: Dict[str, BrowserSession] = {}
+        self.listener_status = "disabled"
+        self.journal = RecoveryJournal(state_path) if state_path is not None else None
+        if self.journal is not None:
+            for data in self.journal.sessions():
+                session = BrowserSession(
+                    session_id=data["session_id"], workflow_id=data["workflow_id"],
+                    original_request=data["original_request"], _sequence=data["sequence"],
+                    awaiting_reply=data["awaiting_reply"], clarification_turn=data["clarification_turn"],
+                    agent_steps=data["agent_steps"], seen_request_ids=set(data["seen_request_ids"]),
+                    workflow_state=data["workflow_state"], _persist=self.save,
+                )
+                session._events = [ActivityEvent(**event) for event in data["events"]]
+                if data["last_successful_arrangement"] is not None:
+                    session.last_successful_arrangement = TargetArrangement.model_validate(data["last_successful_arrangement"])
+                if data["active_command"] is not None:
+                    active = data["active_command"]
+                    session.active_command = ActiveCommand(active["message_id"], TargetArrangement.model_validate(active["target"]))
+                    session.awaiting_reply = False
+                    session.emit(kind="error", message="Execution outcome is unknown after restart. The command will not be resent automatically.",
+                                 details={"outcome_unknown": True})
+                elif data["request_in_progress"] and session.workflow_id is not None and not session.awaiting_reply:
+                    session.workflow_id = None
+                    session.workflow_state = {}
+                    session.emit(kind="error", message="Request interrupted by restart. Nothing was sent; submit a new request.")
+                self._sessions[session.session_id] = session
+                session.save()
+
+    def save(self, session: BrowserSession) -> None:
+        if self.journal is not None:
+            self.journal.save(session.session_id, session.durable_state())
+
+    def request_seen(self, request_id: str) -> bool:
+        return any(request_id in session.seen_request_ids for session in self._sessions.values())
+
+    def reserve(self, session: BrowserSession, command: Dict[str, object]) -> None:
+        if session.active_command is not None:
+            raise RuntimeError("browser session already has an Active command")
+        target = TargetArrangement.model_validate(command["target_positions"])
+        data = session.durable_state()
+        data["active_command"] = {"message_id": command["message_id"], "target": target.model_dump(mode="json")}
+        if self.journal is not None:
+            self.journal.reserve(str(command["message_id"]), session.session_id, command, data)
+        session.activate(str(command["message_id"]), target)
+
+    def complete(self, session: BrowserSession, result: Dict[str, Any], *, reconciled: bool = False) -> None:
+        """Commit a terminal snapshot and journal together before exposing completion."""
+        active = session.active_command
+        if active is None or active.message_id != result["message_id"]:
+            raise RuntimeError("terminal result does not match active command")
+        execution, verification = result["execution"]["status"], result["verification"]["status"]
+        details = {"message_id": result["message_id"], "execution_status": execution,
+                   "verification_status": verification}
+        if reconciled:
+            details["reconciled"] = True
+        event = ActivityEvent(session._sequence + 1, "result",
+                              "Late RES result reconciled." if reconciled else
+                              f"Execution: {execution}. Verification: {verification}.", details)
+        data = session.durable_state()
+        data.update(active_command=None, workflow_id=None, awaiting_reply=False,
+                    request_in_progress=False, sequence=event.sequence,
+                    events=[*data["events"], event.as_dict()])
+        if execution == "COMPLETED":
+            data["last_successful_arrangement"] = active.target.model_dump(mode="json")
+        if self.journal is not None:
+            self.journal.settle(str(result["message_id"]), session.session_id, data, result)
+        session.finish_active(successful=execution == "COMPLETED")
+        session.workflow_id = None
+        session.awaiting_reply = False
+        session._sequence = event.sequence
+        session._events.append(event)
+        for subscriber in session._subscribers:
+            subscriber.put_nowait(event)
+
+    def reconcile(self) -> None:
+        if self.journal is None:
+            return
+        for session in self._sessions.values():
+            if session.active_command is None or session.request_in_progress:
+                continue
+            result = self.journal.result(session.active_command.message_id)
+            if result is None:
+                continue
+            self.complete(session, result, reconciled=True)
+            session.publish_state()
+
+    def close(self) -> None:
+        if self.journal is not None:
+            self.journal.close()
 
     def create(self) -> BrowserSession:
         """Create a new isolated browser session."""
 
         session_id = str(uuid4())
-        session = BrowserSession(session_id=session_id)
+        session = BrowserSession(session_id=session_id, _persist=self.save)
         self._sessions[session_id] = session
+        session.save()
         return session
 
     def get(self, session_id: Optional[str]) -> Optional[BrowserSession]:

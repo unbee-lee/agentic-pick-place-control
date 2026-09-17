@@ -2,12 +2,15 @@
 
 import asyncio
 import json
+import os
+from contextlib import asynccontextmanager, suppress
 from importlib.resources import files
-from typing import AsyncIterator, Optional
+from pathlib import Path
+from typing import AsyncIterator, Awaitable, Callable, Optional
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ucs_app.interfaces import RobotCommandAgent, RobotExecutionStation, UserCommandAgent
@@ -58,11 +61,13 @@ def create_app(
     agent_timeout: float = 20,
     max_repairs: int = 2,
     execution_timeout: float = 30,
+    state_path: Optional[str] = None,
+    result_listener: Optional[Callable[[SessionStore], Awaitable[None]]] = None,
     transcriber: Optional[Transcriber] = None,
 ) -> FastAPI:
     """Build a UCS from explicit adapters at its two external seams."""
 
-    sessions = SessionStore()
+    sessions = SessionStore(state_path if state_path is not None else os.getenv("UCS_STATE_PATH"))
     workflow = UcsWorkflow(
         user_command_agent=user_command_agent,
         robot_command_agent=robot_command_agent,
@@ -72,7 +77,36 @@ def create_app(
         max_repairs=max_repairs,
         execution_timeout=execution_timeout,
     )
-    application = FastAPI(title="User Command Station")
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        task: Optional[asyncio.Future[None]] = None
+        if sessions.journal is not None and result_listener is not None:
+            task = asyncio.ensure_future(result_listener(sessions))
+        try:
+            sessions.reconcile()
+            yield
+        finally:
+            try:
+                if task is not None:
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
+            finally:
+                sessions.close()
+
+    application = FastAPI(title="User Command Station", lifespan=lifespan)
+
+    demo_image_directory = Path.cwd()
+
+    @application.get("/demo-images/{name}")
+    async def demo_image(name: str) -> FileResponse:
+        # Serve only these local demo assets, never arbitrary repository files.
+        if name not in {"before.jpg", "after.jpg"}:
+            raise HTTPException(status_code=404, detail="Demo image not found")
+        image_path = demo_image_directory / name
+        if not image_path.is_file():
+            raise HTTPException(status_code=404, detail="Demo image not configured")
+        return FileResponse(image_path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     @application.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
@@ -100,7 +134,9 @@ def create_app(
 
     @application.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok", "composition": composition_label}
+        return {"status": "ok", "composition": composition_label,
+                "recovery": "disabled" if sessions.journal is None else "durable",
+                "result_listener": sessions.listener_status}
 
     @application.get("/events")
     async def events(request: Request) -> StreamingResponse:

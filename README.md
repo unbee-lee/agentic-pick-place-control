@@ -28,14 +28,17 @@ Open <http://127.0.0.1:8000>. The controlled harness requires no model service, 
 
 ## Documentation
 
+- [Workflow checkpoint](docs/workflow-checkpoint.md): implemented paths, verification boundaries, and remaining deployment work.
+- [Speech input](docs/speech-input.md): reviewed microphone transcription and deployment requirements.
 - [Design](docs/design.md): roles, architecture, validation, and execution boundary.
 - [Contracts](docs/contracts.md): Python validation entry points and message schemas.
 - [Controlled composition](docs/controlled-ucs.md): exact harness behaviour and browser acceptance test.
 - [Live Ollama composition](docs/live-ollama.md): configurable shared-model roles, simulated RES, and live smoke check.
 - [MQTT composition](docs/mqtt-res.md): real broker, separate simulated RES, configuration, and integration checks.
+- [Recovery and evaluation](docs/recovery-and-evaluation.md): opt-in durable journals, restart/late-result semantics, and proposed assessment criteria.
 - [Integrated workflow](docs/integrated-workflow.md): both live roles with MQTT, separate RES, and separately reported deterministic/live checks.
 
-The integrated composition connects both live roles to MQTT and a separate Simulated RES. Simpler model-only and controlled-MQTT compositions remain available for isolated checks. Live-model acceptance remains open in issues #2 and #4. Install Mosquitto on PATH to run the complete suite. Browser speech input and Jetson/HTTPS deployment remain follow-up work. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation in issue #7.
+The integrated composition connects both live roles to MQTT and a separate Simulated RES. Simpler model-only and controlled-MQTT compositions remain available for isolated checks. Live-model acceptance remains open in issues #2 and #4. Install Mosquitto on PATH to run the complete suite. Browser speech input is implemented; deployed speech acceptance and Jetson/HTTPS deployment remain follow-up work. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation in issue #7.
 
 GitHub issues track implementation work; pull requests record changes and verification.
 

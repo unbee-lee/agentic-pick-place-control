@@ -72,7 +72,7 @@ def test_native_workflow_repairs_exact_command_or_exhausts(always_invalid: bool)
             payload = json.loads(request.content)
             assert payload["model"] == "test-model" and payload["stream"] is False
             assert "format" not in payload
-            context = json.loads(payload["messages"][1]["content"])
+            context = json.loads(payload["messages"][-1]["content"])
             evidence.append(context)
             if len(evidence) == 1:
                 return httpx.Response(200, json=response("handoff_assignment", {"assignment": TARGET}))
@@ -107,7 +107,7 @@ def test_clarification_and_sessions_have_only_explicit_evidence() -> None:
         seen: list[dict[str, object]] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            context = json.loads(json.loads(request.content)["messages"][1]["content"])
+            context = json.loads(json.loads(request.content)["messages"][-1]["content"])
             seen.append(context)
             return httpx.Response(200, json=response("ask_clarification", {"question": "Where should the bear go?"}))
 
@@ -135,7 +135,7 @@ def test_serialization_timeout_cancellation_and_recovery() -> None:
         requests: list[str] = []
 
         async def handler(request: httpx.Request) -> httpx.Response:
-            context = json.loads(json.loads(request.content)["messages"][1]["content"])
+            context = json.loads(json.loads(request.content)["messages"][-1]["content"])
             requests.append(context["original_request"])
             entered.set()
             await release.wait()
@@ -205,4 +205,86 @@ def test_browser_api_failure_has_no_raw_model_output(failure: str) -> None:
             result = await browser.post("/arrangement-requests", json={"text": "request", "request_id": str(uuid4())})
             assert result.status_code == 503 and "Nothing was sent" in result.text
             assert "PRIVATE" not in result.text and not res.commands
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("kind", ["mixed", "multiple", "truncated", "bad-arguments"])
+def test_rejected_clarification_never_uses_format_example(kind: str, caplog: pytest.LogCaptureFixture) -> None:
+    """An invalid live response must not turn into the demonstration question."""
+    async def run() -> None:
+        calls = 0
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            message: dict[str, object] = {"role": "assistant", "content": "", "tool_calls": [
+                {"function": {"name": "ask_clarification", "arguments": {"question": "PRIVATE QUESTION"}}}
+            ]}
+            body: dict[str, object] = {"done": True, "message": message}
+            if kind == "mixed":
+                message["content"] = "PRIVATE REASONING"
+            elif kind == "multiple":
+                message["tool_calls"] = [
+                    {"function": {"name": "ask_clarification", "arguments": {"question": "PRIVATE QUESTION"}}},
+                    {"function": {"name": "PRIVATE TOOL", "arguments": {"PRIVATE ARG": "PRIVATE VALUE"}}},
+                ]
+            elif kind == "truncated":
+                body["done_reason"] = "length"
+            else:
+                message["tool_calls"] = [{"function": {"name": "ask_clarification", "arguments": {"question": ""}}}]
+            return httpx.Response(200, json=body)
+        client = OllamaClient(OllamaConfig(), transport=httpx.MockTransport(handler))
+        store, res = SessionStore(), RecordingRES()
+        runner = UcsWorkflow(user_command_agent=OllamaUserCommandAgent(client),
+                             robot_command_agent=OllamaRobotCommandAgent(client),
+                             robot_execution_station=res, sessions=store)
+        session = store.create()
+        with pytest.raises(WorkflowFailure):
+            await runner.submit(session, "PRIVATE request", "one")
+        assert calls == 1 and not res.commands and not session.awaiting_reply
+        assert not any(event.kind == "clarification" for event in session._events)
+        assert "PRIVATE" not in caplog.text
+        assert '"tool_count"' in caplog.text
+    asyncio.run(run())
+
+
+def test_format_demonstration_is_fixed_and_current_context_is_last() -> None:
+    from dataclasses import asdict
+    from ucs_app.ollama import _messages
+    first = AgentContext("elephant left", ("bear centre, hippo right",), candidate={}, assignment={}, command_metadata={})
+    second = AgentContext("another session")
+    messages = _messages("user", first)
+    assert len(messages) == 4
+    assert messages[1:3] == _messages("user", second)[1:3]
+    assert json.loads(str(messages[-1]["content"])) == {**asdict(first), "replies": list(first.replies)}
+    assert messages[2]["content"] == ""
+    assert len(_messages("robot", first)) == 2
+
+
+def test_valid_native_question_is_model_authored_and_reply_completes() -> None:
+    async def run() -> None:
+        contexts: list[dict[str, object]] = []
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            context = json.loads(payload["messages"][-1]["content"])
+            contexts.append(context)
+            if len(contexts) == 1:
+                return httpx.Response(200, json=response("ask_clarification", {"question": "Which slots should bear and hippo occupy?"}))
+            if len(contexts) == 2:
+                return httpx.Response(200, json=response("handoff_assignment", {"assignment": TARGET}))
+            return httpx.Response(200, json=response("validate_command", {"command": {
+                **context["command_metadata"], "target_positions": context["assignment"]}}))
+        client = OllamaClient(OllamaConfig(), transport=httpx.MockTransport(handler))
+        store, res = SessionStore(), RecordingRES()
+        runner = UcsWorkflow(user_command_agent=OllamaUserCommandAgent(client),
+                             robot_command_agent=OllamaRobotCommandAgent(client),
+                             robot_execution_station=res, sessions=store)
+        session = store.create()
+        await runner.submit(session, "elephant left", "one")
+        assert session.awaiting_reply and not res.commands
+        questions = [event.message for event in session._events if event.kind == "clarification"]
+        assert questions == ["Which slots should bear and hippo occupy?"]
+        await runner.answer(session, "one", 1, "bear centre, hippo right")
+        assert len(res.commands) == 1 and res.commands[0]["target_positions"] == TARGET
+        assert contexts[1]["original_request"] == "elephant left"
+        assert contexts[1]["replies"] == ["bear centre, hippo right"]
     asyncio.run(run())
