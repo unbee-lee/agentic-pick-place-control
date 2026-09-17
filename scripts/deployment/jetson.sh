@@ -2,7 +2,7 @@
 # Isolated, loopback-only Jetson demo. Never manages Ollama or system services.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-PRIVATE=${UCS_JETSON_PRIVATE:-/home/icp/ucs-jetson-private}
+PRIVATE=${UCS_JETSON_PRIVATE:-"$HOME/ucs-jetson-private"}
 export PATH="$PRIVATE/venv/bin:$PRIVATE/native/usr/bin:$PRIVATE/native/usr/sbin:/usr/bin:/bin"
 export LD_LIBRARY_PATH="$PRIVATE/native/usr/lib/aarch64-linux-gnu"
 export UCS_OLLAMA_URL=http://127.0.0.1:11435
