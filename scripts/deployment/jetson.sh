@@ -35,6 +35,8 @@ with urllib.request.urlopen('http://127.0.0.1:11435/api/tags', timeout=5) as res
     assert any(m['name'] == 'ministral-3:3b' for m in json.load(response)['models'])
 for port in (1884, 8002):
     with socket.socket() as probe:
+        # Match server restart semantics while still rejecting active listeners.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(('127.0.0.1', port))
 PY
     mkdir -p "$PRIVATE/state" "$PRIVATE/broker" "$PRIVATE/logs"
