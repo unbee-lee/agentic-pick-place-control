@@ -28,6 +28,8 @@ Open <http://127.0.0.1:8000>. The controlled harness requires no model service, 
 
 ## Documentation
 
+- [Isolated Jetson deployment](docs/jetson-deployment.md): startup, SSH access, recovery checks and rollback.
+
 - [Workflow checkpoint](docs/workflow-checkpoint.md): implemented paths, verification boundaries, and remaining deployment work.
 - [Speech input](docs/speech-input.md): reviewed microphone transcription and deployment requirements.
 - [Design](docs/design.md): roles, architecture, validation, and execution boundary.
