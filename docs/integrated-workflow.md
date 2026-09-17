@@ -63,10 +63,43 @@ application failure handling. Tests inspect the MQTT wire payload to verify that
 exact validated candidate is sent once.
 
 Coverage includes all six arrangements, actual clarification replies, explicit
-assignment/metadata handoff, assignment-preserving repair, exhausted repairs,
+assignment/metadata handoff, assignment-preserving intent/schema/metadata repairs, exhausted repairs,
 malformed model actions, service unavailability and model timeout. Existing MQTT
 checks cover broker loss and missing simulator. No Confirm endpoint or target
 approval step is introduced.
+
+The conflict path also exercises RCA feedback routed through UCA to a real user
+reply, restored pending clarification after refresh, and fresh command metadata
+after revised intent. Replayed request IDs and stale replies (including acknowledgements
+after completion) must return HTTP 409 without additional model calls or MQTT
+publication. These guards apply to replies to the old workflow; a new request with
+a fresh ID remains a new model interpretation.
+
+Publication, progress and result SSE events carry the same validated `message_id`.
+The integrated check compares these IDs with the observed MQTT command and checks
+`COMPLETED`/`NOT_RUN`. The live smoke script requires correlated progress and result
+events too. Simulation completion never establishes physical placement verification.
+
+## Application acceptance and remaining live acceptance
+
+Controlled responses exercise the production HTTP/tool decoding, LangGraph routing,
+Python validation, MQTT transport and browser. They establish application behaviour
+under known role decisions; they do not establish live-model interpretation quality.
+No final demo script is required to run these checks.
+
+| Requirement | Controlled verification | Outstanding live-model acceptance |
+| --- | --- | --- |
+| Six explicit arrangements | Browser, exact MQTT target and one dispatch per request | All six must pass with the configured live model |
+| Clarification and actual reply | Missing information and RCA conflict feedback; no early dispatch | Useful question and correct completion after the actual reply |
+| Assignment handoff and bounded repair | Intent, schema and metadata faults repaired without changing assignment; exhaustion sends nothing | Live RCA must demonstrate a bounded repair preserving supplied intent/metadata |
+| Progress and terminal result | Correlated SSE/MQTT IDs, simulated completion and no visual verification claim | Observe the same lifecycle in a successful live run |
+| Failures and replay guards | Model outage/timeout/malformed action, missing broker/RES, stale replies and duplicate requests | Live dependency configuration/readiness must be checked before acceptance |
+
+Report the live smoke independently, including failures. A successful controlled run
+does not close #2's live-model criteria or make #4 fully accepted. The smoke script
+covers arrangements and a clarification reply; it does not inject a live RCA repair
+case. That repair acceptance needs a separately controlled invalid candidate with
+the real RCA and an unchanged assignment, without modifying production decisions.
 
 ## Live smoke test
 
@@ -92,3 +125,7 @@ hardware and visual verification are outside this change.
 Stop UCS, simulator, and the foreground development broker with Ctrl-C in their
 own terminals. Follow the linked MQTT guide for unknown-outcome and restart limits;
 durable recovery remains #6. Tests clean up only their own child processes.
+
+Opt-in durable state and receive-only late-result recovery are described in
+[recovery and evaluation](recovery-and-evaluation.md). Default rehearsal startup
+remains unchanged; enable and rehearse the durable configuration separately.

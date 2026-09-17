@@ -6,7 +6,7 @@ This document specifies the target system. The [controlled composition](controll
 
 A Target arrangement assigns the elephant (`E`), bear (`B`), and hippo (`H`) exactly once to distinct `front_left`, `front_center`, and `front_right` positions. Support all six permutations, including requests beyond size ordering.
 
-- **User Command Agent:** interpret requests, resolve missing information with the user, and pass an explicit animal-position assignment with the original request and replies.
+- **User Command Agent:** interpret requests, infer the single remaining slot when two animals have distinct explicit destinations and the third destination is omitted, clarify unresolved information with the user, and pass the complete assignment with the original request and replies.
 - **Robot Command Agent:** construct candidate RES command JSON from that assignment, use validation feedback to repair generation errors, or request user clarification through the User Command Agent.
 - **Validation Gate:** Python checks the complete command schema, arrangement rules, unchanged application metadata, and equality with the interpreted assignment. This safety-oriented design blocks malformed or invalid commands; it does not establish correct interpretation of the original request or physical robot safety.
 
@@ -44,7 +44,7 @@ flowchart LR
     validation{"Validation Gate — Python"}
     output(["Target Arrangements"])
     input -->|"Input or clarification"| command
-    command -->|"Explicit animal-position assignment"| arrangement
+    command -->|"Interpreted animal-position assignment"| arrangement
     command -.->|"Ask user again"| input
     arrangement -.->|"Needs user clarification"| command
     arrangement -->|"Candidate RES command JSON"| validation
@@ -53,6 +53,10 @@ flowchart LR
 ```
 
 Validation failure returns the candidate and feedback to the Robot Command Agent with the unchanged interpreted assignment and request evidence. Permit two repair attempts after the initial candidate, configurable with `max_repairs`. Every candidate passes the same Python gate. Repairs cannot choose different positions or overwrite system metadata. If resolving a conflict requires revised intent, the Robot Command Agent selects `ASK_USER`; the User Command Agent asks a question and waits for an actual reply. A revised assignment starts a new repair budget, while the overall agent-call and clarification budgets persist.
+
+Remaining-slot inference belongs to the User Command Agent; the shared workflow and validation gate do not fill missing destinations. In live mode this is the model's responsibility; the controlled Python role implements the same unique-slot rule for explicit-pair rehearsals. It must not override explicit positions, unresolved ambiguity, unsupported information, contradictory instructions or negative instructions. For now, ambiguous pronouns and negative instructions require clarification; infeasible constraints require asking which instruction to revise. Complete explicit duplicate destinations are preserved for Robot Command Agent clarification. Explicit left-to-right and right-to-left lists specify positions in that order.
+
+An acknowledgement adds no destinations. While information remains unresolved, the User Command Agent asks for it again. After completion, stale clarification replies are rejected before invoking either agent and must not be retried automatically as new requests. A fresh request starts a new context; these guards do not semantically classify arbitrary new-request text as an acknowledgement.
 
 Python generates the message identifier and timestamp once per interpreted assignment. The Robot Command Agent includes that metadata in its candidate. Application code sends the exact validated command without regenerating it. Exhausted repairs, malformed role actions, and technical tool/model failures stop without dispatch; they do not ask the user to fix internal errors.
 

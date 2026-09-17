@@ -25,7 +25,11 @@ def completed(state: dict[str, Any], target: dict[str, str]) -> bool:
     publications = [e for e in events if e["kind"] == "command_publication"]
     proposals = [e for e in events if e["kind"] == "proposal"]
     results = [e for e in events if e["kind"] == "result"]
+    progress = [e for e in events if e["kind"] == "progress"]
     return (len(publications) == len(proposals) == len(results) == 1
+            and bool(progress)
+            and all(e["details"].get("message_id") == publications[0]["details"]["message_id"]
+                    for e in [*progress, *results])
             and proposals[0]["details"]["target_positions"] == target
             and results[0]["details"]["execution_status"] == "COMPLETED"
             and results[0]["details"]["verification_status"] == "NOT_RUN"

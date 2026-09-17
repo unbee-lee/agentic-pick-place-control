@@ -78,12 +78,13 @@ and a CA file to both server processes. Never commit credentials.
   Refreshing the browser cannot clear that guard. Even a connection failure
   before publication is conservatively displayed as unknown by the current workflow.
 - A simulator outage can leave a published command without a result. Timeout
-  does not cancel any execution already accepted by RES. A late result does not
-  automatically reconcile an unknown outcome in this implementation.
+  does not cancel any execution already accepted by RES. Default in-memory mode
+  does not reconcile late results; opt-in durable mode adds a receive-only listener.
 
 The implementation uses [aiomqtt's managed connection and subscription APIs](https://aiomqtt.bo3hm.com/subscribing-to-a-topic).
-UCS sessions and RES duplicate tracking are in memory. Restart recovery, durable
-tracking and late-result reconciliation remain issue #6. Do not restart processes
+UCS sessions and RES duplicate tracking are in memory by default. See
+[recovery and evaluation](recovery-and-evaluation.md) for opt-in durable journals,
+restart behaviour and late-result reconciliation. Do not restart processes
 or open a new session as a way to clear an uncertain execution; inspect the broker
 and simulator state first. Issue #4 combines this transport with live model roles.
 

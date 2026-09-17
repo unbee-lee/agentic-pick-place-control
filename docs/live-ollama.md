@@ -12,11 +12,14 @@ Start an Ollama service with the selected model already downloaded, then run:
 
 ```bash
 UCS_OLLAMA_URL=http://127.0.0.1:11434 \
-.venv/bin/uvicorn 'ucs_app.live:create_live_app' --factory --host 127.0.0.1 --port 8000
+.venv/bin/uvicorn 'ucs_app.live:create_live_app' --factory --host 127.0.0.1 --port 8001
 ```
 
-Open <http://127.0.0.1:8000>. The page labels this as local model development
+Open <http://127.0.0.1:8001>; keep the controlled desktop demo on port 8000. The page labels this as local model development
 with simulated RES. `/health` reports application availability; it does not probe the model.
+
+The in-process simulated RES waits five seconds between BUSY and completion so
+the execution stage is visible during a live demo. Model response time is additional.
 
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
@@ -38,6 +41,27 @@ The adapter accepts exactly one allowed native tool call, rejects prose and malf
 actions, and returns bounded errors without raw response bodies. Only the typed
 clarification question is shown as model-authored browser text. Do not enable HTTP
 body or model tracing when handling private requests.
+
+The User Command Agent receives one fixed native-tool formatting demonstration
+before the final message containing the current `AgentContext`. The demonstration
+is not a real user turn, a runtime clarification, or a fallback answer. Its input
+and question are fixed and never use another session's data. The Robot Command
+Agent's two-message request is unchanged. Consumers inspecting the request must
+read current evidence from the **last** message, not a fixed index.
+
+This addresses #12's observed response-format mismatch without relaxing the
+response contract: one `ask_clarification` call accompanied by prose is still
+rejected, even if its arguments are valid. Nothing strips that prose, substitutes
+the demonstration question, or automatically retries. Only a newly generated,
+strictly validated model question can enter the workflow. Examples may influence
+model decisions, so correct syntax does not establish intent fidelity or general
+reliability. Keep assessing actual questions and assignments separately.
+
+Adapter diagnostics contain only role, elapsed time, completion/truncation flags,
+content length, tool count and up to two allowlisted tool names (unknown names are
+replaced by `unknown`). They never include content, reasoning, arguments, questions,
+or request text. Rejections log at WARNING; accepted shapes log at INFO when
+`ucs_app.ollama` logging is enabled. No raw model/body tracing is required.
 
 Python owns schema, arrangement, assignment-equality and metadata checks. Invalid
 candidate commands return to the Robot Command Agent for at most two repairs by
@@ -65,3 +89,31 @@ and cancellation. Passing those tests or this small live smoke check does not
 establish clarification quality or sustained reliability; that evaluation remains
 issue #7. See [the integrated workflow](integrated-workflow.md) to connect these roles
 to MQTT and the separate simulated RES.
+
+## Focused Mac/Jetson check for #12
+
+Inspect/reuse a healthy existing Mac `127.0.0.1:11436` SSH tunnel forwarding to the
+Jetson Ollama service at `127.0.0.1:11435`. Keep UCS on the Mac. For that layout,
+set `UCS_OLLAMA_URL=http://127.0.0.1:11436` when starting the live factory on 8001.
+Do not start a second tunnel on the same port, install another model, or change
+Jetson resource limits. Restarting the live app invalidates its in-memory browser
+sessions; reload port 8001 afterward. The controlled process on 8000 need not restart.
+
+```bash
+.venv/bin/python scripts/check_live_clarification.py http://127.0.0.1:8001
+```
+
+This check creates fresh sessions for an explicit complete request, remaining-slot
+inference, and `elephant left`. Only after an actual accepted clarification with
+zero dispatches does it submit `bear centre, hippo right`. It checks the exact
+target, one publication, correlated progress/result and `COMPLETED`/`NOT_RUN`.
+Every HTTP attempt is reported; no question means the reply stage is explicitly
+`NOT_RUN`, never a pass. There are no retries and a 300-second overall budget.
+Question usefulness requires separate judgement; shape/count checks do not score it.
+Report model-format/semantic failures separately from HTTP/connectivity, application
+and execution failures using the bounded adapter metadata and workflow state.
+
+The remaining-slot check relies on the active intent policy; the format example
+does not itself introduce inference rules. Record the source/prompt configuration
+with live results. Passing this focused check does not close the broader live
+acceptance in #2/#4 or deployment/recovery acceptance in #6.

@@ -9,15 +9,18 @@ not repair model interpretation or short-answer clarification-context failures.
 
 ```sh
 .venv/bin/python -m pip install -e '.[dev]'
-UCS_SPEECH_LANGUAGE=en-AU .venv/bin/uvicorn ucs_app.controlled:create_controlled_app --factory --host 127.0.0.1 --port 8002
+UCS_OLLAMA_URL=http://127.0.0.1:11436 UCS_OLLAMA_MODEL=ministral-3:3b UCS_SPEECH_LANGUAGE=en-AU \
+.venv/bin/uvicorn ucs_app.live:create_live_app --factory --host 127.0.0.1 --port 8001
 ```
 
-Use an unused port for checking speech; preserve existing servers on 8000/8001.
-The controlled composition keeps its existing simulation delay. For the live
-composition, retain the existing Ollama URL/model settings and use
-`ucs_app.live:create_live_app` instead. Speech runs on the Mac and makes no
-Jetson requests. Coordinate a restart before adding speech to an existing demo
-server. HTML served by an older process keeps the microphone controls hidden.
+Port 8001 is the combined live-model and speech application; no separate speech
+server on 8002 is needed. The command assumes an active local tunnel on port 11436
+to Jetson Ollama; use the actual Ollama URL for other deployments. Speech
+transcription runs on the Mac and contacts Google. After the user submits the
+reviewed text, the live agents contact Jetson Ollama. The controlled composition
+also supports speech through the same shared application code. Restart an older
+server to load newly added routes; refreshing the browser alone is insufficient.
+HTML served by an older process keeps the microphone controls hidden.
 Run one Uvicorn worker for the stated two-transcription service-wide bound.
 
 SpeechRecognition **3.14.6** is pinned. Python 3.9+ is supported. Browser capture
@@ -64,7 +67,7 @@ FLAC, not browser MediaRecorder WebM/Opus output. The worker constructs AudioDat
 from validated PCM and the package converts it to FLAC in memory.
 [Audio format reference](https://github.com/Uberi/speech_recognition/blob/3.14.6/reference/library-reference.rst)
 
-The page discloses that Stop sends audio to Google. UCS writes no recordings or
+Stop sends audio to Google. The current compact demo UI omits the explanatory disclosure paragraph; the visible disclosure criterion in #5 remains outstanding for deployment acceptance. UCS writes no recordings or
 raw recognition responses to files or logs; worker stderr is suppressed and
 failures use fixed public messages. Temporary audio exists in browser/server
 memory and process pipes only. Do not enable request-body logging at a proxy.

@@ -35,6 +35,7 @@ class WorkflowState(TypedDict, total=False):
     assignment: Dict[str, object]
     command_metadata: Dict[str, object]
     repair_attempts: int
+    assignment_revision: int
     question: str
     route: Literal["arrange", "clarify", "validate", "feedback", "repair", "deliver"]
 
@@ -81,7 +82,7 @@ class UcsWorkflow:
         async with session.lock:
             if session.request_in_progress or session.active_command or session.awaiting_reply:
                 raise WorkflowConflict("Finish the current request first")
-            if request_id in session.seen_request_ids:
+            if self._sessions.request_seen(request_id):
                 raise WorkflowConflict("This request was already submitted; it will not be sent again")
             if len(session.seen_request_ids) >= 256:
                 raise WorkflowConflict("Session request limit reached; start a new browser session")
@@ -94,7 +95,8 @@ class UcsWorkflow:
         state: WorkflowState = {
             "session_id": session.session_id, "workflow_id": request_id,
             "original_request": text, "replies": [], "feedback": "",
-            "candidate": {}, "assignment": {}, "command_metadata": {}, "repair_attempts": 0, "question": "",
+            "candidate": {}, "assignment": {}, "command_metadata": {}, "repair_attempts": 0,
+            "assignment_revision": 0, "question": "",
         }
         session.emit(kind="input", message="Arrangement request submitted",
                      details={"new_request": True, "arrangement_request": text})
@@ -103,17 +105,18 @@ class UcsWorkflow:
     async def answer(self, session: BrowserSession, workflow_id: str, turn: int, text: str) -> None:
         async with session.lock:
             self._require_reply(session, workflow_id, turn)
-            config = self._config(session.session_id, workflow_id)
-            previous = await self._graph.aget_state(config)
-            replies = list(previous.values["replies"])
+            previous = deepcopy(session.workflow_state)
+            replies = list(previous["replies"])
             replies.append(text)
             session.awaiting_reply = False
             session.request_in_progress = True
-        state: WorkflowState = {
+        state = cast(WorkflowState, {
+            **previous,
             "session_id": session.session_id, "workflow_id": workflow_id,
             "replies": replies, "feedback": "", "candidate": {}, "assignment": {}, "command_metadata": {}, "repair_attempts": 0, "question": "",
-        }
-        session.emit(kind="input", message="Clarification answer received")
+        })
+        session.emit(kind="input", message="Clarification answer received",
+                     details={"clarification_answers": replies})
         await self._run(session, state)
 
     async def cancel(self, session: BrowserSession, workflow_id: str, turn: int) -> None:
@@ -121,6 +124,7 @@ class UcsWorkflow:
             self._require_reply(session, workflow_id, turn)
             session.awaiting_reply = False
             session.workflow_id = None
+            session.workflow_state = {}
             session.emit(kind="cancellation", message="Request cancelled; nothing sent")
             session.publish_state()
 
@@ -137,7 +141,9 @@ class UcsWorkflow:
             )
         except (Exception, asyncio.CancelledError) as error:
             session.awaiting_reply = False
-            if session.active_command is None:
+            if session.workflow_id is None and any(event.kind == "result" for event in session._events):
+                message = "Execution finished, but final workflow bookkeeping failed. Check the recorded result before starting another request."
+            elif session.active_command is None:
                 session.workflow_id = None
                 message = "Request stopped because an adapter failed or a workflow limit was reached. Nothing was sent."
             else:
@@ -175,6 +181,7 @@ class UcsWorkflow:
         if session.agent_steps >= self._max_steps:
             raise RuntimeError("agent step limit reached")
         session.agent_steps += 1
+        session.save()
 
     def _route(self, state: WorkflowState) -> str:
         return state["route"]
@@ -191,12 +198,14 @@ class UcsWorkflow:
             raise RuntimeError("intent clarification requires a real user reply")
         assert isinstance(action, Arrange)
         return {"route": "arrange", "assignment": action.assignment.model_dump(mode="json"),
+                "assignment_revision": state.get("assignment_revision", 0) + 1,
                 "repair_attempts": 0, "candidate": {}, "feedback": "",
                 "command_metadata": {"schema_version": "1.0", "message_id": str(uuid4()),
                                      "type": "ARRANGE", "created_at": utc_timestamp()}}
 
     async def _robot_command(self, state: WorkflowState) -> Dict[str, object]:
         session = self._session(state)
+        session.workflow_state = deepcopy(dict(state))
         self._step(session)
         payload = await asyncio.wait_for(self._robot_command_agent.decide(self._context(state)), self._agent_timeout)
         action = robot_action.validate_python(dict(payload))
@@ -243,6 +252,7 @@ class UcsWorkflow:
             raise RuntimeError("clarification limit reached")
         session.clarification_turn += 1
         session.awaiting_reply = True
+        session.workflow_state = deepcopy(dict(state))
         session.emit(kind="clarification", message=state["question"], details={
             "workflow_id": session.workflow_id, "turn": session.clarification_turn,
         })
@@ -254,18 +264,14 @@ class UcsWorkflow:
         raw_target = command["target_positions"]
         if not isinstance(raw_target, Mapping) or raw_target != state["assignment"]:
             raise RuntimeError("validated target changed before dispatch")
-        target = validate_target_positions(cast(Mapping[str, object], raw_target))
+        validate_target_positions(cast(Mapping[str, object], raw_target))
         validate_message("command", command)
-        session.activate(str(command["message_id"]), target)
+        session.workflow_state = deepcopy(dict(state))
+        self._sessions.reserve(session, command)
         session.emit(kind="command_publication", message="Sending validated target automatically",
                      details={"message_id": command["message_id"]})
         result = await asyncio.wait_for(self._execute(session, command), self._execution_timeout)
-        execution = cast(Mapping[str, object], result["execution"])
-        verification = cast(Mapping[str, object], result["verification"])
-        session.finish_active(successful=execution["status"] == "COMPLETED")
-        session.workflow_id = None
-        session.emit(kind="result", message=f"Execution: {execution['status']}. Verification: {verification['status']}.",
-                     details={"execution_status": execution["status"], "verification_status": verification["status"]})
+        self._sessions.complete(session, dict(result))
         return {}
 
     async def _execute(self, session: BrowserSession, command: Mapping[str, object]) -> Mapping[str, object]:
@@ -277,7 +283,9 @@ class UcsWorkflow:
             if update.message_type == "result":
                 terminal = update.payload
             else:
-                session.emit(kind="progress", message="RES is busy", details={"stage": update.payload.get("stage")})
+                session.emit(kind="progress", message="RES is busy", details={
+                    "message_id": command["message_id"], "stage": update.payload.get("stage"),
+                })
         if terminal is None:
             raise RuntimeError("RES returned no terminal result")
         return terminal
