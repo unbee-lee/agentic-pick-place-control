@@ -136,7 +136,7 @@ class UcsWorkflow:
     async def _run(self, session: BrowserSession, state: WorkflowState) -> None:
         try:
             await self._graph.ainvoke(
-                state,  # type: ignore[arg-type]  # LangGraph TypedDict stub mismatch
+                state,
                 config=self._config(session.session_id, state["workflow_id"]),
             )
         except (Exception, asyncio.CancelledError) as error:
