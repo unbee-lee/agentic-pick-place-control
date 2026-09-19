@@ -93,3 +93,23 @@ Session/checkpoint state and duplicate tracking are in memory by default. [Opt-i
 Browser tests cover successful command repair, exhausted repairs without user questions, delivery without confirmation, invalid-target clarification, cancellation, failed execution, unknown outcomes, and refresh during clarification, completion, active execution, and uncertain execution. Workflow tests cover all six arrangements, role feedback, malformed/unauthorized actions, stale and cross-session replies, concurrent submissions, bounded calls and questions, timeouts, and uncertain or failed execution outcomes. These tests verify controlled routing and application guards, not real-model accuracy.
 
 Clarification answers appear below the original request while clarification is pending, and are restored after refresh. Both controlled and live agents receive the original request and all actual replies. In controlled mode, a later complete, unambiguous explicit-pair answer restates the target and permits recovery from unsupported earlier wording; this does not add general natural-language understanding.
+
+## Negative constraints and unique inference
+
+The live UCA follows [D02/D03](design.md): one valid complete arrangement under
+all supported, unambiguous positive and negative constraints permits `ARRANGE`;
+zero requires `CLARIFY` explaining the conflict and asking which instruction to
+change; multiple require `CLARIFY` for missing information. Unsupported entities,
+contradictory evidence and ambiguous corrections still require clarification.
+A consistent negative constraint alone does not block inference.
+
+Controlled mode intentionally accepts only explicit animal-position pairs and
+can infer a remaining slot from two distinct pairs. It asks for a complete
+explicit-pair restatement of negative wording. It does not implement D02/D03
+natural-language interpretation. The live model performs that interpretation;
+Python validation, strict native-tool decoding and bounded repairs are unchanged.
+
+`tests/test_negative_policy.py` uses newly authored synthetic requests and scripted
+native model-adapter responses. It checks prompt delivery, evidence preservation,
+clarification/no dispatch and exact validated dispatch under supplied decisions.
+It is not live-model acceptance or retained held-out evaluation.

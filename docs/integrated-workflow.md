@@ -129,3 +129,23 @@ durable recovery remains #6. Tests clean up only their own child processes.
 Opt-in durable state and receive-only late-result recovery are described in
 [recovery and evaluation](recovery-and-evaluation.md). Default rehearsal startup
 remains unchanged; enable and rehearse the durable configuration separately.
+
+## Negative constraints and unique inference
+
+The live UCA follows [D02/D03](design.md): one valid complete arrangement under
+all supported, unambiguous positive and negative constraints permits `ARRANGE`;
+zero requires `CLARIFY` explaining the conflict and asking which instruction to
+change; multiple require `CLARIFY` for missing information. Unsupported entities,
+contradictory evidence and ambiguous corrections still require clarification.
+A consistent negative constraint alone does not block inference.
+
+Controlled mode intentionally accepts only explicit animal-position pairs and
+can infer a remaining slot from two distinct pairs. It asks for a complete
+explicit-pair restatement of negative wording. It does not implement D02/D03
+natural-language interpretation. The live model performs that interpretation;
+Python validation, strict native-tool decoding and bounded repairs are unchanged.
+
+`tests/test_negative_policy.py` uses newly authored synthetic requests and scripted
+native model-adapter responses. It checks prompt delivery, evidence preservation,
+clarification/no dispatch and exact validated dispatch under supplied decisions.
+It is not live-model acceptance or retained held-out evaluation.
