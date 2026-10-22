@@ -9,8 +9,8 @@ and dispatch. No extraction-only prototype or deterministic model fallback is us
 
 This factory is deployed on Jetson at revision `226dd299`, using the base
 `ministral-3:3b` model, a loopback broker and a separately running simulated RES.
-The later D02/D03 prompt policy documented below is consolidated locally but is
-not claimed as deployed or live-model accepted. See the
+The later D02/D03 prompt policy documented below is merged into `main` through
+PR #17 but is not claimed as deployed or live-model accepted. See the
 [handover](../HANDOVER.md) and [deployment guide](jetson-deployment.md) before
 changing the running checkout.
 

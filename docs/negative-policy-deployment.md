@@ -1,16 +1,17 @@
 # D02/D03 deployment review
 
-This amendment is stacked on PR #16 (`a3ae4cc7edd793989d6c5c378c50cf681260e9e0`),
-above #15, #13, #10 and #8. It changes the live UCA policy, documentation and
-scripted tests only. Review this diff separately; do not merge it directly onto
-`main` without its dependencies. No existing PR is updated by local preparation.
+This amendment and its dependencies are included in `main` through consolidation
+PR #17. It changes the live UCA policy, documentation and scripted tests only.
+Although merged, it is not claimed as deployed or live-model accepted; treat this
+document as a reviewed update procedure rather than evidence of deployment.
 
 The deployment layout and launcher are described in [Jetson deployment](jetson-deployment.md).
 The last documented deployed revision is
 `226dd29907fda0916319b7070eb7b055de2c6d69`; it has not been remotely reverified for
-this amendment. The PR #16 publication changes, including its private-directory
-default, must also be reviewed when updating from that revision. Explicitly retain
-the installation's current `UCS_JETSON_PRIVATE`, environment and durable journals.
+this amendment. The portable deployment changes now in `main`, including the
+private-directory default, must also be reviewed when updating from that revision.
+Explicitly retain the installation's current `UCS_JETSON_PRIVATE`, environment and
+durable journals.
 No dependency, model, decoder, validation, repair, schema or state migration is
 part of this policy amendment.
 
@@ -135,8 +136,8 @@ pointing at the isolated review worktree, not the dirty original checkout.
 - `python -m pip check`: no broken requirements.
 - AST comparison confirms the Ollama adapter differs only in `USER_INSTRUCTIONS`
   and the ARRANGE tool description. Workflow, controlled parser, action schemas and
-  contract validation are unchanged from PR #16. Diff whitespace and deployment
-  shell-block syntax checks passed.
+  contract validation are unchanged from the deployment baseline. Diff whitespace
+  and deployment shell-block syntax checks passed.
 - Live policy smoke: NOT RUN. No configured endpoint/model overrides were present;
   the documented local Jetson tunnel on port 11436 was unavailable, and local
   Ollama on 11434 did not contain `ministral-3:3b`. No model was substituted,

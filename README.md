@@ -8,7 +8,7 @@ Start with [the project handover](HANDOVER.md) for the implementation, deploymen
 
 - The controlled, live-model, MQTT, speech and opt-in durable-recovery paths are implemented.
 - The last verified Jetson application revision is `226dd299`; it uses the base `ministral-3:3b` model and a separate Simulated RES.
-- Later D02/D03 policy and publication-review changes are consolidated locally but are not claimed as deployed.
+- Later D02/D03 policy and publication-review changes are merged into `main` but are not claimed as deployed.
 - Real microphone/Google acceptance, broad live-model reliability, agreed evaluation completion and some recovery failure cases remain open.
 - A fine-tuned candidate exists as private experimental evidence; it is not the deployed default or an accepted production model.
 
