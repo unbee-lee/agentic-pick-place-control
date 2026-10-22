@@ -3,7 +3,7 @@
 import asyncio
 from copy import deepcopy
 from collections.abc import Mapping
-from typing import Dict, List, Literal, Optional, TypedDict, cast
+from typing import Any, Dict, List, Literal, Optional, TypedDict, cast
 from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
@@ -136,7 +136,7 @@ class UcsWorkflow:
     async def _run(self, session: BrowserSession, state: WorkflowState) -> None:
         try:
             await self._graph.ainvoke(
-                state,
+                cast(Any, state),
                 config=self._config(session.session_id, state["workflow_id"]),
             )
         except (Exception, asyncio.CancelledError) as error:
