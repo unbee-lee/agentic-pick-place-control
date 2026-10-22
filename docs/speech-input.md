@@ -5,7 +5,14 @@ an agent, creates a workflow, publishes a command, or submits the form. The user
 must review the text and select **Submit request** or **Send answer**. This does
 not repair model interpretation or short-answer clarification-context failures.
 
-## Setup and startup (Mac UCS)
+The same speech implementation is present in the verified Jetson deployment at
+revision `226dd299`, reached from the laptop through `http://localhost:8002` over
+an SSH tunnel. Deterministic ARM64 encoding and transport tests passed, but no
+accepted user-operated microphone/Google run was recorded. The compact interface
+also still lacks the required visible Google-processing disclosure, so issue #5
+remains open.
+
+## Development setup (Mac UCS)
 
 ```sh
 .venv/bin/python -m pip install -e '.[dev]'
@@ -13,9 +20,10 @@ UCS_OLLAMA_URL=http://127.0.0.1:11436 UCS_OLLAMA_MODEL=ministral-3:3b UCS_SPEECH
 .venv/bin/uvicorn ucs_app.live:create_live_app --factory --host 127.0.0.1 --port 8001
 ```
 
-Port 8001 is the combined live-model and speech application; no separate speech
-server on 8002 is needed. The command assumes an active local tunnel on port 11436
-to Jetson Ollama; use the actual Ollama URL for other deployments. Speech
+Port 8001 is the combined Mac-hosted live-model and speech development application.
+It is separate from the Jetson deployment on port 8002. The command assumes an
+active local tunnel on port 11436 to Jetson Ollama; use the actual Ollama URL for
+other deployments. Speech
 transcription runs on the Mac and contacts Google. After the user submits the
 reviewed text, the live agents contact Jetson Ollama. The controlled composition
 also supports speech through the same shared application code. Restart an older
@@ -67,10 +75,12 @@ FLAC, not browser MediaRecorder WebM/Opus output. The worker constructs AudioDat
 from validated PCM and the package converts it to FLAC in memory.
 [Audio format reference](https://github.com/Uberi/speech_recognition/blob/3.14.6/reference/library-reference.rst)
 
-Stop sends audio to Google. The current compact demo UI omits the explanatory disclosure paragraph; the visible disclosure criterion in #5 remains outstanding for deployment acceptance. UCS writes no recordings or
-raw recognition responses to files or logs; worker stderr is suppressed and
-failures use fixed public messages. Temporary audio exists in browser/server
-memory and process pipes only. Do not enable request-body logging at a proxy.
+Stop sends audio to Google. The current compact demo UI omits the explanatory
+disclosure paragraph; the visible disclosure criterion in #5 remains outstanding
+for deployment acceptance. UCS writes no recordings or raw recognition responses
+to files or logs; worker stderr is suppressed and failures use fixed public
+messages. Temporary audio exists in browser/server memory and process pipes only.
+Do not enable request-body logging at a proxy.
 UCS cannot promise Google's retention policy. The generic key used by this
 `recognize_google` service is intended for personal/testing use and can be revoked;
 this is not the separately authenticated Google Cloud Speech-to-Text service.

@@ -1,6 +1,6 @@
 # System design
 
-This document specifies the target system. The [controlled composition](controlled-ucs.md) implements these graph routes and automatic delivery with deterministic substitutes for the two agent roles and RES. Real LLM decision-making, MQTT, and speech input are separate integration work; passing harness tests does not establish agentic model behaviour.
+This document specifies the implemented target system. The [controlled composition](controlled-ucs.md) exercises the graph routes with deterministic role and RES substitutes. The [integrated composition](integrated-workflow.md) uses live Ollama roles, real MQTT and a separate simulated RES, while [speech input](speech-input.md) returns editable text for explicit submission. Passing controlled tests does not establish live-model quality.
 
 ## Scope and roles
 
@@ -10,7 +10,7 @@ A Target arrangement assigns the elephant (`E`), bear (`B`), and hippo (`H`) exa
 - **Robot Command Agent:** construct candidate RES command JSON from that assignment, use validation feedback to repair generation errors, or request user clarification through the User Command Agent.
 - **Validation Gate:** Python checks the complete command schema, arrangement rules, unchanged application metadata, and equality with the interpreted assignment. This safety-oriented design blocks malformed or invalid commands; it does not establish correct interpretation of the original request or physical robot safety.
 
-LangGraph coordinates the roles. One shared local LLM served by Ollama, using separate role instructions and sequential calls, is the proposed deployment. Model tool-calling capability and Jetson performance require testing. A distinct role does not require a separately loaded model.
+LangGraph coordinates the roles. One configurable local LLM served by Ollama receives separate role instructions in sequential calls; a distinct role does not require a separately loaded model. This composition is deployed on Jetson with `ministral-3:3b`, but model reliability and full acceptance remain qualified.
 
 ## System architecture
 
@@ -28,11 +28,11 @@ flowchart LR
         ucs <-->|"MQTT"| broker
         broker <-->|"MQTT"| res
     end
-    browser <-->|"HTTPS"| ucs
-    ucs <-->|"Web API: audio / transcript"| google
+    browser <-->|"localhost HTTP over SSH tunnel"| ucs
+    ucs <-->|"HTTPS speech request"| google
 ```
 
-The browser submits requests, answers questions, and displays progress and results. The application validates targets and sends them automatically to the Simulated RES. Public topics are `robot/command`, `robot/status`, and `robot/result`; credentials and broker access stay server-side.
+The browser submits requests, answers questions, and displays progress and results. The application validates targets and sends them automatically to the Simulated RES. Public topics are `robot/command`, `robot/status`, and `robot/result`; credentials and broker access stay server-side. The verified deployment exposes only Jetson loopback services and reaches the UCS from the laptop through an SSH tunnel. It is not a public HTTPS service.
 
 ## Agentic workflow
 
@@ -77,8 +77,8 @@ The successful agentic output is one Target arrangement. Application code then s
 
 ## Speech and evaluation
 
-Speech recording is user-initiated. UCS sends recorded audio to Google for transcription and returns editable text; the user must submit it before interpretation. Provide typed fallback, disclose external audio processing, and avoid retaining raw audio or unrestricted recognizer responses. The browser deployment needs a secure context for microphone capture; verify the speech adapter's actual transport during implementation.
+Speech recording is user-initiated. UCS sends recorded audio to Google over HTTPS and returns editable text; the user must submit it before interpretation. Typed fallback remains available and raw audio is not persisted by default. The localhost origin used through the SSH tunnel is a browser secure context, but real deployed microphone/Google acceptance and the required visible processing disclosure remain outstanding.
 
 Evaluate intent fidelity across all six arrangements, useful clarification, invalid-input handling, observable action selection and tool-feedback adaptation, and latency. Separate real-model measurements from deterministic validation and delivery tests. Include stale/duplicate requests, unavailable dependencies, and uncertain delivery. Agent labels and diagram loops alone are not evidence of agentic behaviour.
 
-The controlled implementation uses strict action schemas and configurable limits: 12 agent calls, 3 clarification questions, 2 repair attempts after the initial candidate, 20 seconds per agent call, and 30 seconds for execution. Model choice, prompts, durable dispatch persistence, recovery details, and the evaluation protocol still require implementation and evaluation. State and deduplication are in memory; they do not survive a restart. Physical control, ROS, perception, fine-tuning, and comparative model studies are outside the baseline. A separately evaluated fine-tuned candidate remains experimental and is not the deployed default.
+The implementation uses strict action schemas and configurable limits: 12 agent calls, 3 clarification questions, 2 repair attempts after the initial candidate, 20 seconds per agent call, and 30 seconds for execution. Durable SQLite state and receive-only late-result reconciliation are available when explicitly configured; the default development harness remains in memory. Evaluation agreement and broad live-model reliability remain incomplete. Physical control, ROS and perception remain outside the baseline. A separately evaluated fine-tuned candidate is an extension beyond that baseline, remains experimental, and is not the deployed default.

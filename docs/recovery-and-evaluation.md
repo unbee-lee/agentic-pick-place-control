@@ -5,7 +5,7 @@
 Recovery is **opt-in**. With `UCS_STATE_PATH` and `UCS_RES_STATE_PATH` unset,
 existing startup commands, controlled request inputs, model adapters, and browser
 behaviour remain unchanged. This work does not add language interpretation, camera,
-speech, or fine-tuning behaviour. Keep tomorrow's established desktop configuration
+speech, or fine-tuning behaviour. Keep an established development configuration
 unless the durable configuration below has been rehearsed separately.
 
 The controlled parser still accepts its existing explicit animal/position pairs.
@@ -220,10 +220,13 @@ This is evidence for those exercised paths, not proof against every possible
 network/dependency failure. No live-model performance, Jetson recovery or HTTPS
 measurements were made in this change.
 
-Remaining acceptance: live-model criteria under #2/#4, agreed evaluation thresholds
-and measurements, deployed Jetson recovery rehearsal, broker-persistence/queue-loss
-behaviour in the intended deployment, and HTTPS where used. Issue #6 should remain
-open until the applicable acceptance evidence and assessment agreement exist.
+The Jetson deployment later completed a separate deterministic durable-recovery
+rehearsal covering restarts, queued/late results, broker disconnect/reconnect,
+duplicates, unknown guards and no automatic resend. This is stronger than the
+pre-deployment state described above, but it does not establish power-loss survival,
+all broker-persistence/queue-loss behaviour, live-model recovery reliability or
+agreed evaluation acceptance. Issue #6 should remain open until those applicable
+evidence and assessment gaps are resolved.
 
 Recovery-only checkpoint verification on 2026-09-16: an isolated snapshot excluding
 the separate demo UI, image assets, inference-policy edits and expanded #4 tests

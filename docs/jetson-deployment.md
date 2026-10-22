@@ -219,10 +219,11 @@ needed. Do not downgrade code underneath running services. Any code rollback
 requires stopping first, inspecting unresolved execution and using a compatible
 committed revision with the same durable state; deleting databases is not recovery.
 
-Keep #2, #4, #5, #6, #7 and #12 open for missing acceptance, including faithful live
-repairs, sustained reliability, evaluation agreement and broker queue/power-loss
-behavior. The compact UI still omits the visible Google-processing disclosure
-recorded in PR #15. Before using speech, understand that Stop sends audio to Google;
-review and explicitly submit the transcript. Actual microphone/Google testing,
-Mac permission behavior and public HTTPS acceptance remain outstanding. No model
-change, fine-tuning, physical control or camera verification is included.
+Keep #2, #4, #5, #6, #7, #11 and #12 open for missing acceptance, including
+faithful live repairs, sustained reliability, evaluation agreement, model adoption
+and broker queue/power-loss behavior. The compact UI still omits the visible
+Google-processing disclosure recorded in PR #15. Before using speech, understand
+that Stop sends audio to Google; review and explicitly submit the transcript.
+Actual microphone/Google testing, Mac permission behavior and public HTTPS
+acceptance remain outstanding. No fine-tuned model was adopted for this deployment,
+and no physical control or camera verification is included.

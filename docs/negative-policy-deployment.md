@@ -118,7 +118,7 @@ Both directions preserve state and the installed environment. They neither alter
 Ollama nor download models. No deployed source file is hand-edited. If the old
 revision is absent or no longer matches the recorded deployment, stop for review.
 
-## Local amendment verification (2026-09-19)
+## Local amendment verification
 
 The Mac check used the existing Python 3.9 virtual environment with `PYTHONPATH=src`
 pointing at the isolated review worktree, not the dirty original checkout.
@@ -128,10 +128,10 @@ pointing at the isolated review worktree, not the dirty original checkout.
   annotations before the passing run.
 - Full automated suite: 248 passed, one LangChain pending-deprecation warning
   (235.62 seconds), including browser, MQTT and recovery checks.
-- Strict mypy: one error at `src/ucs_app/workflow.py:139` (`WorkflowState` passed to
-  LangGraph `ainvoke`). The untouched PR #16 baseline reproduced exactly the same
-  error (39 source files; amendment 40). This is unresolved environment/dependency
-  compatibility, not a passing strict-typing check. No ignore or gate change was added.
+- The original 2026-09-19 check reproduced a LangGraph `ainvoke` stub mismatch in
+  the Python 3.9 environment. The closeout branch replaced the version-specific
+  suppression/removal with an explicit boundary cast; strict mypy now passes across
+  40 source files.
 - `python -m pip check`: no broken requirements.
 - AST comparison confirms the Ollama adapter differs only in `USER_INSTRUCTIONS`
   and the ARRANGE tool description. Workflow, controlled parser, action schemas and
@@ -142,6 +142,9 @@ pointing at the isolated review worktree, not the dirty original checkout.
   Ollama on 11434 did not contain `ministral-3:3b`. No model was substituted,
   downloaded or tuned; no deployment or service restart was attempted.
 
-Scripted response tests establish routing under known decisions, not the model's
-ability to choose those decisions. Jetson Python 3.12 typing and actual live D02/D03
-acceptance remain required review items alongside the existing deployment caveats.
+Closeout verification on 22 October 2026 passed all 248 automated tests, strict
+mypy across 40 source files, dependency checking, shell syntax and Git whitespace
+checks. Scripted response tests establish routing under known decisions, not the
+model's ability to choose those decisions. Actual live D02/D03 acceptance and
+deployment of this amendment remain required review items alongside the existing
+deployment caveats.

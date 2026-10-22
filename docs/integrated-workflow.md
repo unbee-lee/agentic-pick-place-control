@@ -5,6 +5,15 @@ real MQTT and a separate simulated RES. Interpretation and clarification remain
 model responsibilities. Python retains validation, bounded repairs, session guards
 and dispatch. No extraction-only prototype or deterministic model fallback is used.
 
+## Deployment status
+
+This factory is deployed on Jetson at revision `226dd299`, using the base
+`ministral-3:3b` model, a loopback broker and a separately running simulated RES.
+The later D02/D03 prompt policy documented below is consolidated locally but is
+not claimed as deployed or live-model accepted. See the
+[handover](../HANDOVER.md) and [deployment guide](jetson-deployment.md) before
+changing the running checkout.
+
 ## Start
 
 Install dependencies and start Mosquitto and the separate RES using
@@ -119,8 +128,9 @@ Deterministic tests and the real-model smoke result must be reported separately.
 
 This composition makes the infrastructure testable while #2's live clarification
 acceptance and #7's broader reliability evaluation remain open. Issue #4 is not
-complete merely because deterministic tests pass. Fine-tuning, speech, physical
-hardware and visual verification are outside this change.
+complete merely because deterministic tests pass. Speech and fine-tuning were
+implemented as separate follow-up work; neither changes the physical-hardware and
+visual-verification boundary of this composition.
 
 Stop UCS, simulator, and the foreground development broker with Ctrl-C in their
 own terminals. Follow the linked MQTT guide for unknown-outcome and restart limits;
