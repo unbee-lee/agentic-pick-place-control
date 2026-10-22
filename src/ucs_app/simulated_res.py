@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ucs_app.controlled import ControlledRobotExecutionStation
 from ucs_app.mqtt import COMMAND_TOPIC, RESULT_TOPIC, STATUS_TOPIC, MqttConfig, MqttError, decode_payload
 from ucs_app.transport import utc_timestamp
+from ucs_app.recovery import RecoveryJournal
 from ucs_contracts import ContractValidationError, validate_message, validate_target_positions
 
 
@@ -37,9 +38,10 @@ def rejection(message_id: str) -> dict[str, object]:
 class SimulatedRES:
     """One sequential executor; never evict identifiers and accidentally replay them."""
 
-    def __init__(self, config: SimulationConfig) -> None:
+    def __init__(self, config: SimulationConfig, state_path: str = "") -> None:
         self._config = config
-        self._seen: set[str] = set()
+        self._journal = RecoveryJournal(state_path) if state_path else None
+        self._seen: set[str] = set() if self._journal is None else self._journal.identities()
         self._simulation = ControlledRobotExecutionStation(result_delay_seconds=config.delay_seconds)
 
     async def handle(self, client: aiomqtt.Client, message: aiomqtt.Message) -> None:
@@ -60,6 +62,8 @@ class SimulatedRES:
         if len(self._seen) >= self._config.max_commands:
             raise MqttError("Simulator command limit reached; operator review required")
         self._seen.add(identity)  # Reserve before validation, work, or publication.
+        if self._journal is not None:
+            self._journal.remember(identity)
         try:
             validate_message("command", command)
             validate_target_positions(cast(Mapping[str, object], command["target_positions"]))
@@ -80,11 +84,19 @@ class SimulatedRES:
             async for message in client.messages:
                 await self.handle(client, message)
 
+    def close(self) -> None:
+        if self._journal is not None:
+            self._journal.close()
+
 
 def main() -> None:
     try:
         simulation = SimulationConfig(delay_seconds=float(os.getenv("UCS_RES_DELAY", "0.75")))
-        asyncio.run(SimulatedRES(simulation).serve(MqttConfig.from_env()))
+        res = SimulatedRES(simulation, os.getenv("UCS_RES_STATE_PATH", ""))
+        try:
+            asyncio.run(res.serve(MqttConfig.from_env()))
+        finally:
+            res.close()
     except (aiomqtt.MqttError, MqttError):
         print("Simulated RES stopped: MQTT failure or command limit; inspect service state before restarting", flush=True)
         raise SystemExit(1) from None

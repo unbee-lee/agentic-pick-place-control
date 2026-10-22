@@ -27,12 +27,17 @@ recordings/
 uploads/
 local-audio/
 
+# Private photos used by the local presentation
+/before.jpg
+/after.jpg
+
 # Logs, local models, builds, and temporary output
 *.log
 *.gguf
 dist/
 build/
 tmp/
+runtime-state/
 
 # Editor and operating-system files
 .DS_Store

@@ -60,6 +60,94 @@ def test_each_valid_permutation_dispatches_exactly_once(positions: tuple[str, ..
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("positions", list(permutations(["left", "centre", "right"])))
+@pytest.mark.parametrize("omitted", [0, 1, 2])
+def test_unique_remaining_slot_dispatches_without_question(positions: tuple[str, ...], omitted: int) -> None:
+    async def run() -> None:
+        workflow, store, res, agent = composition()
+        session = store.create()
+        pairs = list(zip(["elephant", "bear", "hippo"], positions))
+        text = ", ".join(f"{animal} {position}" for index, (animal, position) in enumerate(pairs) if index != omitted)
+        await workflow.submit(session, text, "request-1")
+        assert len(res.commands) == 1
+        expected = dict(zip(["E", "B", "H"], ["front_" + p.replace("centre", "center") for p in positions]))
+        assert res.commands[0]["target_positions"] == expected
+        assert not session.awaiting_reply
+        assert len(agent.contexts) == 1
+    asyncio.run(run())
+
+
+def test_unique_remaining_slot_after_reply() -> None:
+    async def run() -> None:
+        workflow, store, res, _ = composition()
+        session = store.create()
+        await workflow.submit(session, "elephant left", "request-1")
+        assert session.awaiting_reply and not res.commands
+        await workflow.answer(session, "request-1", 1, "bear centre")
+        assert len(res.commands) == 1
+        assert res.commands[0]["target_positions"] == TARGET
+        assert not session.awaiting_reply
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("text", [
+    "elephant left", "elephant left, bear left",
+    "elephant left, elephant right, bear centre",
+    "elephant left, bear centre, hippo not right",
+    "elephant left, bear centre, tiger right",
+    "elephant left, bear centre, it right",
+])
+def test_remaining_slot_does_not_override_unresolved_input(text: str) -> None:
+    async def run() -> None:
+        workflow, store, res, _ = composition()
+        session = store.create()
+        await workflow.submit(session, text, "request-1")
+        assert session.awaiting_reply and not res.commands
+    asyncio.run(run())
+
+
+def test_contradiction_needs_explicit_correction_before_inference() -> None:
+    async def run() -> None:
+        workflow, store, res, _ = composition()
+        session = store.create()
+        await workflow.submit(session, "elephant left, elephant right, bear centre", "request-1")
+        assert session.awaiting_reply and not res.commands
+        await workflow.answer(session, "request-1", 1, "bear centre")
+        assert session.awaiting_reply and not res.commands
+        await workflow.answer(session, "request-1", 2, "elephant left")
+        assert len(res.commands) == 1
+        assert res.commands[0]["target_positions"] == TARGET
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("original", ["please arrange the animals", "elephant left"])
+def test_complete_reply_recovers_and_reaches_agent(original: str) -> None:
+    async def run() -> None:
+        workflow, store, res, agent = composition()
+        session = store.create()
+        await workflow.submit(session, original, "request-1")
+        assert session.awaiting_reply and not res.commands
+        await workflow.answer(session, "request-1", 1, "yes")
+        assert session.awaiting_reply and not res.commands
+        answer = "elephant left, bear center and hippo right"
+        await workflow.answer(session, "request-1", 2, answer)
+        assert len(res.commands) == 1
+        assert res.commands[0]["target_positions"] == TARGET
+        assert agent.contexts[-1].original_request == original
+        assert agent.contexts[-1].replies == ("yes", answer)
+    asyncio.run(run())
+
+
+def test_partial_reply_cannot_discard_unsupported_history() -> None:
+    async def run() -> None:
+        workflow, store, res, _ = composition()
+        session = store.create()
+        await workflow.submit(session, "hippo not right", "request-1")
+        await workflow.answer(session, "request-1", 1, "elephant left, bear centre")
+        assert session.awaiting_reply and not res.commands
+    asyncio.run(run())
+
+
 def test_invalid_candidate_returns_original_request_and_errors_to_command_agent() -> None:
     async def run() -> None:
         workflow, store, res, command = composition()

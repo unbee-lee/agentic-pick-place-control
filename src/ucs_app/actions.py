@@ -14,7 +14,7 @@ class Action(BaseModel):
 
 
 class InterpretedAssignment(Action):
-    """Explicit intent; duplicate destinations remain available for clarification."""
+    """Interpreted intent from explicit destinations and permitted remaining-slot inference; duplicate destinations remain available for clarification."""
 
     E: FrontPosition
     B: FrontPosition

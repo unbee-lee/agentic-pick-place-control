@@ -17,22 +17,57 @@ class ControlledUserCommandAgent:
     async def decide(self, context: AgentContext) -> Mapping[str, object]:
         if context.feedback:
             return {"action": "CLARIFY", "question": context.feedback}
-        for text in (context.original_request, *context.replies):
-            remaining = re.sub(r"(elephant|bear|hippo)\s+(left|centre|center|right)\b", "", text.lower())
+        pair_pattern = r"(elephant|bear|hippo)\s+(left|centre|center|right)\b"
+
+        def explicit_pairs_only(text: str) -> bool:
+            remaining = re.sub(pair_pattern, "", text.lower())
             remaining = re.sub(r"\band\b|[\s,.;]", "", remaining)
-            if remaining:
+            return not remaining
+
+        texts = (context.original_request, *context.replies)
+        # A complete, unambiguous actual reply can restate the whole target.
+        # Keep the full evidence in AgentContext; only the scripted parser resets.
+        for index in range(len(texts) - 1, 0, -1):
+            text = texts[index]
+            pairs = {(animal, position.replace("centre", "center"))
+                     for animal, position in re.findall(pair_pattern, text.lower())}
+            if (explicit_pairs_only(text) and len(pairs) == 3
+                    and len({animal for animal, _ in pairs}) == 3
+                    and len({position for _, position in pairs}) == 3):
+                texts = texts[index:]
+                break
+        for text in texts:
+            if not explicit_pairs_only(text):
                 return {"action": "CLARIFY", "question": (
-                    "This controlled demo accepts explicit pairs only. Cancel and submit "
-                    "a request such as: elephant left, bear centre, hippo right."
+                    "This controlled demo accepts explicit pairs only. Please reply with "
+                    "all three positions, for example: elephant left, bear centre, hippo right."
                 )}
-        target: dict[str, object] = {}
-        for text in (context.original_request, *context.replies):
+        target: dict[str, str] = {}
+        contradictions: set[str] = set()
+        for text in texts:
+            turn_positions: dict[str, set[str]] = {}
             for animal, position in re.findall(
                 r"(elephant|bear|hippo)\s+(left|centre|center|right)\b", text.lower()
             ):
-                target[{"elephant": "E", "bear": "B", "hippo": "H"}[animal]] = (
-                    "front_" + position.replace("centre", "center")
-                )
+                key = {"elephant": "E", "bear": "B", "hippo": "H"}[animal]
+                destination = "front_" + position.replace("centre", "center")
+                turn_positions.setdefault(key, set()).add(destination)
+                target[key] = destination
+            for key, destinations in turn_positions.items():
+                if len(destinations) > 1:
+                    contradictions.add(key)
+                else:
+                    # An explicit later reply may correct an earlier contradiction.
+                    contradictions.discard(key)
+        if contradictions:
+            return {"action": "CLARIFY", "question": (
+                "An animal has conflicting destinations. Please specify one position "
+                "for each animal with conflicting destinations."
+            )}
+        if len(target) == 2 and len(set(target.values())) == 2:
+            missing_animal = ({"E", "B", "H"} - target.keys()).pop()
+            remaining_slot = ({"front_left", "front_center", "front_right"} - set(target.values())).pop()
+            target[missing_animal] = remaining_slot
         if len(target) != 3:
             return {"action": "CLARIFY", "question": (
                 "Please specify the missing positions using animal and position pairs, "
@@ -101,7 +136,7 @@ class ControlledRobotExecutionStation:
         )
 
 
-def create_controlled_app(*, result_delay_seconds: float = 0.75) -> FastAPI:
+def create_controlled_app(*, result_delay_seconds: float = 5.0) -> FastAPI:
     """Build the explicitly labelled controlled-development composition."""
 
     return create_app(

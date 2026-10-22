@@ -16,6 +16,43 @@ from ucs_app.controlled import ControlledRobotCommandAgent, ControlledRobotExecu
 from ucs_app.interfaces import AgentContext, ControllerUpdate
 
 
+@pytest.mark.parametrize("controlled_ucs_url,expected", [
+    ("success", "Completed"), ("failed", "Failed"), ("missing", "Outcome unknown"),
+], indirect=["controlled_ucs_url"])
+def test_demo_photo_tracks_only_matching_completion(controlled_ucs_url: str, expected: str) -> None:
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        # Private presentation photographs are not required by the test suite.
+        page.route("**/demo-images/*.jpg", lambda route: route.fulfill(
+            content_type="image/svg+xml",
+            body='<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><rect width="4" height="3"/></svg>',
+        ))
+        page.goto(controlled_ucs_url)
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Ready")
+        expect(page.get_by_test_id("demo-before")).to_be_visible()
+        expect(page.get_by_test_id("demo-after")).to_be_hidden()
+        page.get_by_test_id("arrangement-request").fill("elephant left")
+        page.get_by_role("button", name="Submit request").click()
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Needs clarification")
+        expect(page.get_by_test_id("demo-after")).to_be_hidden()
+        page.get_by_test_id("arrangement-request").fill("bear centre, hippo right")
+        page.get_by_role("button", name="Send answer").click()
+        expect(page.get_by_test_id("ucs-status")).to_have_text(expected)
+        if expected == "Completed":
+            expect(page.get_by_test_id("demo-after")).to_be_visible()
+            page.get_by_test_id("arrangement-request").fill("elephant right, bear centre, hippo left")
+            page.get_by_role("button", name="Submit request").click()
+            expect(page.get_by_test_id("demo-after")).to_be_hidden()
+            expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
+            expect(page.get_by_test_id("demo-after-message")).to_contain_text("No matching demo photo")
+        else:
+            expect(page.get_by_test_id("demo-after")).to_be_hidden()
+        page.reload()
+        expect(page.get_by_test_id("demo-after")).to_be_hidden()
+        browser.close()
+
+
 @pytest.fixture
 def controlled_ucs_url(request: pytest.FixtureRequest) -> Iterator[str]:
     """Run the controlled UCS composition on an available local port."""
@@ -90,6 +127,35 @@ def controlled_ucs_url(request: pytest.FixtureRequest) -> Iterator[str]:
     thread.join(timeout=5)
     if thread.is_alive():
         raise RuntimeError("controlled UCS did not stop")
+
+
+def test_clarification_answers_restore_and_complete_restatement_recovers(controlled_ucs_url: str) -> None:
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(controlled_ucs_url)
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Ready")
+        page.get_by_test_id("arrangement-request").fill("please arrange the animals")
+        page.get_by_role("button", name="Submit request").click()
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Needs clarification")
+        answer = '<img src=x onerror="window.injected=true">'
+        page.get_by_test_id("arrangement-request").fill(answer)
+        page.get_by_role("button", name="Send answer").click()
+        expect(page.get_by_test_id("clarification-answers").locator("p")).to_have_text([f"Clarification answer: {answer}"])
+        expect(page.get_by_test_id("clarification-context")).to_contain_text("please arrange the animals")
+        assert page.get_by_test_id("clarification-answers").locator("img").count() == 0
+        page.reload()
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Needs clarification")
+        expect(page.get_by_test_id("clarification-answers").locator("p")).to_have_text([f"Clarification answer: {answer}"])
+        page.get_by_test_id("arrangement-request").fill("elephant left, bear center and hippo right")
+        page.get_by_role("button", name="Send answer").click()
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
+        expect(page.locator('[data-event-kind="command_publication"]')).to_have_count(1)
+        page.get_by_test_id("arrangement-request").fill("elephant left")
+        page.get_by_role("button", name="Submit request").click()
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Needs clarification")
+        expect(page.get_by_test_id("clarification-answers").locator("p")).to_have_count(0)
+        browser.close()
 
 
 def test_valid_target_is_delivered_without_confirmation(controlled_ucs_url: str) -> None:
@@ -182,7 +248,7 @@ def test_new_request_resets_activity_but_keeps_current_request_steps(controlled_
         page = browser.new_page()
         page.goto(controlled_ucs_url)
         expect(page.get_by_test_id("ucs-status")).to_have_text("Ready")
-        expect(page.get_by_role("heading", name="Set the target arrangement")).to_be_visible()
+        expect(page.get_by_role("heading", name="User Command Station")).to_be_visible()
         expect(page.get_by_text("Controlled development", exact=False)).to_have_count(0)
         for text, expected in [
             ("elephant left, bear centre, hippo right", "front left"),
@@ -240,9 +306,15 @@ def test_refresh_restores_question_and_allows_cancel_then_new_request(controlled
         page.get_by_role("button", name="Submit request").click()
         expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
         page.reload()
+        expect(page.get_by_test_id("ucs-status")).to_have_text("Ready")
+        expect(page.get_by_test_id("validated-target")).to_be_hidden()
+        expect(page.get_by_test_id("activity-trail").locator("li")).to_have_count(0)
+        expect(page.get_by_label("Your request", exact=True)).to_have_value("")
+        expect(page.get_by_role("button", name="Submit request")).to_be_enabled()
+        page.get_by_label("Your request", exact=True).fill("elephant left, bear centre, hippo right")
+        page.get_by_role("button", name="Submit request").click()
         expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
-        expect(page.get_by_test_id("target-E")).to_contain_text("front right")
-        expect(page.locator('[data-event-kind="clarification"]')).to_have_count(0)
+        expect(page.get_by_test_id("target-E")).to_contain_text("front left")
         expect(page.locator('[data-event-kind="command_publication"]')).to_have_count(1)
         browser.close()
 
