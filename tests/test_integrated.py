@@ -31,6 +31,14 @@ class Evidence:
     commands: list[dict[str, object]] = field(default_factory=list)
 
 
+def wait_for_commands(evidence: Evidence, count: int, timeout: float = 5) -> None:
+    """Wait for the independent MQTT observer to record published commands."""
+    deadline = time.monotonic() + timeout
+    while len(evidence.commands) < count and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert len(evidence.commands) >= count
+
+
 @contextmanager
 def server(app: FastAPI) -> Iterator[str]:
     port = free_port()
@@ -159,6 +167,7 @@ def test_integrated_all_arrangements_and_actual_reply(integrated: tuple[str, Evi
                     page.get_by_role("button", name="Submit request").click()
                 assert response.value.status == 202
                 expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
+                wait_for_commands(evidence, index + 1)
                 assert len(evidence.commands) == index + 1
                 assert evidence.commands[-1] == evidence.candidates[-1]
                 assert evidence.commands[-1]["target_positions"] == dict(zip(
@@ -171,6 +180,7 @@ def test_integrated_all_arrangements_and_actual_reply(integrated: tuple[str, Evi
             page.get_by_test_id("arrangement-request").fill("bear centre, hippo right")
             page.get_by_role("button", name="Send answer").click()
             expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
+            wait_for_commands(evidence, 7)
             assert len(evidence.commands) == 7 and evidence.commands[-1] == evidence.candidates[-1]
             assert all(call["model"] == "scripted-test-model" for call in evidence.calls)
             expect(page.get_by_role("button", name="Confirm", exact=True)).to_have_count(0)
@@ -198,6 +208,7 @@ def test_integrated_repair_and_model_failures(integrated: tuple[str, Evidence], 
             expect(page.locator('[data-event-kind="clarification"]')).to_have_count(0)
             assert "PRIVATE" not in page.locator("body").inner_text()
             if expected == "Completed":
+                wait_for_commands(evidence, 1)
                 assert len(evidence.candidates) == 2 and evidence.commands == [evidence.candidates[-1]]
                 contexts = [cast(dict[str, object], c["context"]) for c in evidence.calls if c["role"] == "robot"]
                 assert contexts[0]["assignment"] == contexts[1]["assignment"]
@@ -226,6 +237,7 @@ def test_integrated_smoke_script_with_scripted_model(integrated: tuple[str, Evid
                             text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.count("PASS") == 8
+    wait_for_commands(evidence, 7)
     assert len(evidence.commands) == 7
 
 
@@ -283,6 +295,7 @@ def test_integrated_conflict_reply_correlation_and_stale_guards(integrated: tupl
             response = page.request.post(url + "/clarifications", data=reply)
             assert response.status == 202
             expect(page.get_by_test_id("ucs-status")).to_have_text("Completed")
+            wait_for_commands(evidence, 1)
             assert evidence.commands == [evidence.candidates[-1]]
             revised = cast(dict[str, object], evidence.calls[-1]["context"])
             assert revised["assignment"] == {"E": "front_left", "B": "front_center", "H": "front_right"}
