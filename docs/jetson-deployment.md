@@ -7,17 +7,19 @@ verification. Speech uses browser capture and the server-side Google adapter.
 
 ## Source and private storage
 
-This branch is based on PR #15's `end-to-end-workflow-checkpoint` at
-`d5b79112f68080104beab1182184624ab84b1a2c`. It adds deployment tooling and documentation;
-it does not merge the PR stack or close related issues.
+The deployment work was originally developed from the pre-Jetson checkpoint at
+`d5b79112f68080104beab1182184624ab84b1a2c`. It is now included in `main` through
+consolidation PR #17. That merge preserved the deployment history but did not close
+the related acceptance issues.
 
 The pre-publication deployment was verified at
 `226dd29907fda0916319b7070eb7b055de2c6d69` (retained in local deployment history).
-Publication sanitizes documentation and replaces the account-specific private-path
-default with `$HOME/ucs-jetson-private`, still overridable by `UCS_JETSON_PRIVATE`.
-These publication edits have not been deployed. Check `git rev-parse HEAD` in the
-Jetson checkout and compare it with the process start/deployment record; moving a
-checkout alone does not prove running Python processes loaded that revision.
+The repository version sanitizes documentation and replaces the account-specific
+private-path default with `$HOME/ucs-jetson-private`, still overridable by
+`UCS_JETSON_PRIVATE`. These portability edits are merged but have not been deployed.
+Check `git rev-parse HEAD` in the Jetson checkout and compare it with the process
+start/deployment record; moving a checkout alone does not prove running Python
+processes loaded that revision.
 
 Use a separate checkout and environment. Transfer only reviewed committed code,
 never a dirty Mac working directory. Keep credentials, journals, downloads,

@@ -71,13 +71,13 @@ recovery rehearsal, strict typing for the deployed Python version, dependency
 checks, startup/readiness checks and simulated live-model attempts. Those results
 must not be generalized into physical safety or broad model-accuracy claims.
 
-## Local closeout state versus deployed state
+## Repository state versus deployed state
 
-The local `handover/project-closeout` branch consolidates the deployment history,
-portable deployment documentation, D02/D03 policy work and later verification
-fixes. It is newer than the deployed revision.
+GitHub `main` now contains the deployment history, portable deployment
+documentation, D02/D03 policy work and later verification fixes consolidated by
+PR #17. It is newer than the deployed revision.
 
-Do not claim that the branch's later policy or documentation changes are running
+Do not claim that `main`'s later policy or documentation changes are running
 on Jetson. Before any update:
 
 - inspect the actual running process revision and environment;
@@ -141,9 +141,9 @@ Do not store raw recordings or unrestricted recognition responses by default. Se
 The detailed state machine, restart behaviour and remaining recovery evidence are
 documented in [recovery and evaluation](docs/recovery-and-evaluation.md).
 
-## Verification at local closeout
+## Consolidation verification
 
-The consolidated local branch was verified with:
+The consolidated state merged through PR #17 was verified with:
 
 - 248 automated tests passed;
 - strict mypy passed across 40 source files;
@@ -158,20 +158,16 @@ test failures, but dependency maintenance remains future work.
 
 ## GitHub work state
 
-The repository currently has a stack of draft pull requests rather than one merged
-line of all work:
+PR #17 established one merged line from `main` through the final handover state:
 
 | PR | Purpose | Current relationship |
 | --- | --- | --- |
-| [#8](https://github.com/unbee-lee/agentic-pick-place-control/pull/8) | Shared Ollama role adapters | Base draft after `main` |
-| [#10](https://github.com/unbee-lee/agentic-pick-place-control/pull/10) | Integrated typed workflow | Stacked on #8 |
-| [#13](https://github.com/unbee-lee/agentic-pick-place-control/pull/13) | Reviewed speech transcription | Stacked on #10 |
-| [#15](https://github.com/unbee-lee/agentic-pick-place-control/pull/15) | Pre-Jetson workflow checkpoint | Historical checkpoint stacked on #13 |
-| [#16](https://github.com/unbee-lee/agentic-pick-place-control/pull/16) | Jetson deployment | Stacked on #15 |
+| [#9](https://github.com/unbee-lee/agentic-pick-place-control/pull/9) | Real MQTT and separate Simulated RES | Merged into `main` |
+| [#17](https://github.com/unbee-lee/agentic-pick-place-control/pull/17) | Consolidated implementation and handover | Merged into `main` on 22 October 2026 |
 
-PR #9, containing real MQTT and the separate Simulated RES, is already merged.
-The local closeout branch is intended to make consolidation and handover review
-easier; it has not been pushed or merged at the time of this document update.
+The former stacked drafts #8, #10, #13, #15 and #16 were closed as superseded by
+#17. Their descriptions remain historical evidence; their branches were not merged
+independently.
 
 Open issues should be resolved by evidence, not by the existence of code alone:
 
@@ -185,10 +181,9 @@ Open issues should be resolved by evidence, not by the existence of code alone:
 | [#11](https://github.com/unbee-lee/agentic-pick-place-control/issues/11) | Training occurred; adoption and complete comparative acceptance remain unresolved |
 | [#12](https://github.com/unbee-lee/agentic-pick-place-control/issues/12) | Mixed prose/tool response failure remains a focused open reliability problem |
 
-When cleaning GitHub, update each item with its implemented evidence and explicit
-limitations before merging or closing it. If unfinished acceptance is transferred
-to future work, link the replacement issue rather than marking unmet criteria as
-passed.
+Each open issue now includes an evidence and limitation summary. Keep unmet
+acceptance visible during handover; if work is transferred, link the replacement
+issue rather than marking unmet criteria as passed.
 
 ## Private and local-only material
 
@@ -206,13 +201,13 @@ manifest. Do not copy the local preservation folder into Git.
 
 ## Recommended next actions
 
-1. Review this closeout branch and complete the documentation/acceptance wording.
-2. Create one reviewed consolidation PR or deliberately reconcile the existing PR
-   stack; do not merge both paths independently.
-3. Update each open issue and draft PR with final evidence and limitations.
-4. Merge or close branches only after their commits are recoverable and their
-   replacement path is recorded.
-5. Reinspect the live Jetson before any update; do not infer its state from local
-   Git alone.
-6. Synchronize the internship Notion page from the finalized GitHub handover rather
-   than treating Notion as an independent source of implementation truth.
+1. Reinspect the live Jetson before any update; do not infer its state from GitHub
+   `main` alone.
+2. Decide whether and when to deploy the merged D02/D03 policy, then run the
+   separately approved live-policy checks.
+3. Complete or explicitly transfer the acceptance gaps in issues #2, #4, #5, #6,
+   #7, #11 and #12.
+4. Synchronize the internship Notion page from this finalized GitHub handover
+   rather than treating Notion as an independent source of implementation truth.
+5. Transfer approved private artifacts separately with access controls and a
+   manifest.
