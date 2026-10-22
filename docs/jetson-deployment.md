@@ -49,6 +49,15 @@ The model's stored temperature was 0.15; the application overrides it with 0.
 The launcher does not download models or manage the existing Ollama service,
 container configuration, mounts or resource limits.
 
+### Experimental fine-tuned candidate
+
+The verified deployment uses the base `ministral-3:3b` model listed above. A
+separately evaluated candidate, `ministral-v2a-sim-20260921:q5_k_m`, exists as
+private experimental evidence but is not the deployed default and is not approved
+as a production model. Its model weights, raw evaluation inputs and detailed
+results remain outside Git. A bounded candidate-gate result must not be read as
+full workflow acceptance or authorization to change the serving configuration.
+
 ## Prepare a fresh environment
 
 On the Mac, choose your SSH alias/account and a dedicated tunnel socket:

@@ -40,7 +40,7 @@ Open <http://127.0.0.1:8000>. The controlled harness requires no model service, 
 - [Recovery and evaluation](docs/recovery-and-evaluation.md): opt-in durable journals, restart/late-result semantics, and proposed assessment criteria.
 - [Integrated workflow](docs/integrated-workflow.md): both live roles with MQTT, separate RES, and separately reported deterministic/live checks.
 
-The integrated composition connects both live roles to MQTT and a separate Simulated RES. Simpler model-only and controlled-MQTT compositions remain available for isolated checks. The isolated Jetson deployment is documented at its verified deployed revision; later policy and publication-review changes are not claimed as deployed. Browser speech input is implemented, while real microphone/Google acceptance remains outstanding. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation.
+The integrated composition connects both live roles to MQTT and a separate Simulated RES. Simpler model-only and controlled-MQTT compositions remain available for isolated checks. The isolated Jetson deployment is documented at its verified deployed revision; later policy and publication-review changes are not claimed as deployed. Browser speech input is implemented, while real microphone/Google acceptance remains outstanding. An optional fine-tuned candidate remains experimental, private evidence and is not the deployed default. These checks do not establish model accuracy or physical safety; broader model reliability remains under evaluation.
 
 GitHub issues track implementation work; pull requests record changes and verification.
 
