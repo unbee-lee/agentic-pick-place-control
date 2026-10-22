@@ -1,6 +1,10 @@
-# End-to-end workflow checkpoint
+# Historical pre-Jetson workflow checkpoint
 
-This checkpoint records an implemented user-to-simulation workflow, before Jetson
+> Historical record: this document describes the state before the Jetson
+> application deployment. It is retained for traceability and is not the current
+> project-status or handover document.
+
+This checkpoint records an implemented user-to-simulation workflow before Jetson
 application deployment and full live-model acceptance. It is not a production
 readiness or model-accuracy claim.
 
@@ -19,7 +23,7 @@ controlled answers. Speech supplies editable text and never submits automaticall
 The gate checks schema, distinct supported positions, assignment equality and
 application metadata. Repairs preserve intent and metadata; invalid or exhausted
 work is not dispatched. Durable state and receive-only late-result reconciliation
-are opt-in; see [recovery](recovery-and-evaluation.md).
+are opt-in; see [recovery](../recovery-and-evaluation.md).
 
 ## Controlled rehearsal and optional images
 
